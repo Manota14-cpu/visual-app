@@ -142,7 +142,15 @@ $aviso = [ordered]@{
     sha256  = $hash
     tamano  = $tamano
 }
-$aviso | ConvertTo-Json | Set-Content -Path "$publicar\version.json" -Encoding utf8
+# Sin BOM. `Set-Content -Encoding utf8` en PowerShell 5.1 escribe la marca de
+# orden al principio del archivo, y aunque `fetch` la descarta —probado—, un
+# JSON que empieza con un carácter invisible rompe cualquier otra cosa que lo
+# lea. No vale la pena dejarlo librado a que el que lo lea sea indulgente.
+[System.IO.File]::WriteAllText(
+    "$publicar\version.json",
+    ($aviso | ConvertTo-Json),
+    (New-Object System.Text.UTF8Encoding $false)
+)
 
 # --- Listo ----------------------------------------------------------
 
