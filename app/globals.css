@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-lienzo text-tinta font-sans text-base;
+  }
+
+  /* El foco se ve siempre: media aplicación se usa con el teclado mientras la
+     otra mano cuenta plata. Es el mismo anillo azul del sistema. */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(0, 113, 227, 0.35),
+      0 0 0 1px #0071e3;
+    border-radius: 8px;
+  }
+
+  ::selection {
+    background: rgba(0, 113, 227, 0.16);
+  }
+
+  /* Una barra fina que aparece sobre el contenido, como la de macOS. */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border: 4px solid transparent;
+    background-clip: content-box;
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.32);
+    background-clip: content-box;
+  }
+
+  /* Los números se comparan de una fila a otra: tienen que alinearse aunque
+     cambien de ancho. */
+  table,
+  .cifras {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .etiqueta-campo {
+    @apply block text-micro font-semibold uppercase tracking-[0.06em] text-tinta-tenue;
+  }
+
+  /**
+   * Una tarjeta: blanca, esquinas amplias y dos sombras muy abiertas. El borde
+   * de medio píxel es lo que evita que se funda con el fondo en pantallas
+   * claras, sin llegar a dibujar una raya.
+   */
+  .hoja {
+    @apply rounded-lg bg-papel shadow-tarjeta;
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+  }
+
+  /**
+   * Vidrio esmerilado.
+   *
+   * `saturate` es lo que lo hace parecer vidrio y no un velo gris: levanta el
+   * color de lo que pasa por detrás, que es lo que hace el material de iOS.
+   * Si el navegador no puede difuminar, queda un blanco casi sólido — nunca
+   * un panel transparente con el texto encima del contenido.
+   */
+  .vidrio {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .vidrio {
+      background: rgba(255, 255, 255, 0.96);
+    }
+  }
+
+  .vidrio-denso {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: saturate(200%) blur(32px);
+    -webkit-backdrop-filter: saturate(200%) blur(32px);
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .vidrio-denso {
+      background: rgba(255, 255, 255, 0.98);
+    }
+  }
+
+  /**
+   * El material de un menú.
+   *
+   * Sólido, no traslúcido. La regla es dónde cae cada capa: el vidrio va donde
+   * atrás solo pasa el fondo de la página —las barras—, y ahí es lo que da
+   * profundidad. Un desplegable, en cambio, cae sobre texto, y dos capas de
+   * letras superpuestas no se leen; peor todavía en una máquina donde el
+   * desenfoque no está disponible, que es cuando el velo se vuelve un vidrio
+   * empañado. Lo que lo despega de la página es la sombra, no la transparencia
+   * — y así es como se ven los menús del sistema.
+   */
+  .vidrio-menu {
+    background: #ffffff;
+  }
+
+  /* La línea de medio píxel que separa sin pesar. */
+  .pelo {
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+  }
+
+  /**
+   * El contenedor de avisos vive en la capa superior del navegador para poder
+   * verse por encima de un diálogo. Un popover trae su propio recuadro y se
+   * centra solo, así que hay que devolverlo a su lugar.
+   */
+  #avisos[popover] {
+    inset: auto;
+    right: 1rem;
+    bottom: 1rem;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    overflow: visible;
+  }
+}
+
+@layer utilities {
+  .cifra {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+
+  /* El bloque que espera datos: un brillo que lo recorre. */
+  .esperando {
+    background-image: linear-gradient(
+      100deg,
+      rgba(0, 0, 0, 0.045) 40%,
+      rgba(0, 0, 0, 0.015) 50%,
+      rgba(0, 0, 0, 0.045) 60%
+    );
+    background-size: 200% 100%;
+    @apply animate-brillo;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Al imprimir un comprobante no van ni la navegación ni los botones, y el
+   vidrio no existe: es papel. */
+@media print {
+  .sin-imprimir {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .hoja {
+    box-shadow: none !important;
+    border: 1px solid #d2d2d7 !important;
+  }
+}

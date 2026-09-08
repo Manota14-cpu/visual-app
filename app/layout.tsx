@@ -1,0 +1,36 @@
+import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
+import { Avisos } from "@/components/avisos";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "AppPack",
+  description: "Stock, caja y ventas del negocio, en tu computadora.",
+  // La ventana de la aplicación y la barra de tareas toman el ícono de acá: el
+  // SVG no les alcanza, necesitan un PNG con tamaño declarado.
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon-192.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#FBFBFA",
+  width: "device-width",
+  initialScale: 1,
+};
+
+export default function Layout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="es">
+      <body>
+        <Avisos>{children}</Avisos>
+      </body>
+    </html>
+  );
+}

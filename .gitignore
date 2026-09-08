@@ -1,0 +1,35 @@
+# Dependencias
+node_modules/
+
+# Build de la interfaz
+.next/
+out/
+
+# Paquete
+dist/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Herramientas de asistentes (no forman parte del proyecto)
+.agents/
+.claude/
+.codex/
+skills-lock.json
+
+# Lo que se sube a una publicación (se arma con build.ps1)
+publicar/

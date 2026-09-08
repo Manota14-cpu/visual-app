@@ -1,0 +1,268 @@
+import { nuevoId, Regla, type Almacen } from "../almacen.ts";
+import { noEncontrado, type Ruteador } from "../http.ts";
+import { ajustarStock, contiene, entero, normalizar, recortar, recortarObligatorio } from "../reglas.ts";
+import { ESTADOS_PEDIDO, type BaseDatos, type EstadoPedido, type ItemPedido, type Pedido } from "../tipos.ts";
+import { paginar } from "./catalogo.ts";
+
+/**
+ * Las ventas ya hechas: las de mostrador, las devoluciones y las que se cargan
+ * a mano para un pedido que todavía no se entregó.
+ *
+ * Cambiar el estado de un pedido mueve stock —cancelarlo devuelve a la
+ * estantería lo que se había descontado, y reabrirlo lo vuelve a sacar—, así
+ * que estado y stock se tocan en la misma operación o en ninguna.
+ */
+export function rutasPedidos(r: Ruteador, a: Almacen): void {
+  r.get("/pedidos", ({ consulta }) =>
+    a.leer((d) => {
+      let pedidos = [...d.pedidos];
+
+      const estado = consulta.get("estado");
+      if (estado && estado !== "todos") pedidos = pedidos.filter((p) => p.estado === estado);
+
+      const canal = consulta.get("canal");
+      if (canal && canal !== "todos") pedidos = pedidos.filter((p) => p.canal === canal);
+
+      const dias = entero(consulta.get("dias"), 0);
+      if (dias > 0) {
+        const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
+        pedidos = pedidos.filter((p) => p.creadoEn >= desde);
+      }
+
+      const q = consulta.get("q");
+      if (q) {
+        const termino = normalizar(q);
+        pedidos = pedidos.filter(
+          (p) =>
+            contiene(p.nombre, termino) ||
+            contiene(p.notas, termino) ||
+            String(p.numero).includes(termino) ||
+            p.items.some((i) => contiene(i.nombre, termino))
+        );
+      }
+
+      pedidos.sort((x, y) => y.numero - x.numero);
+
+      return {
+        ...paginar(pedidos, consulta, 30, (p) => vista(d, p)),
+        conteos: Object.fromEntries(
+          ESTADOS_PEDIDO.map((e) => [e, d.pedidos.filter((p) => p.estado === e).length])
+        ),
+      };
+    })
+  );
+
+  r.get("/pedidos/:id", ({ params }) =>
+    a.leer((d) => {
+      const pedido = d.pedidos.find((p) => p.id === params.id);
+      return pedido ? vista(d, pedido) : noEncontrado("Ese pedido no existe.");
+    })
+  );
+
+  r.post("/pedidos/:id/estado", ({ params, cuerpo }) =>
+    a.escribir((d) => {
+      const pedido = d.pedidos.find((p) => p.id === params.id);
+      if (!pedido) throw new Regla("Ese pedido no existe.");
+
+      const estado = cuerpo.estado as EstadoPedido;
+      if (!ESTADOS_PEDIDO.includes(estado)) throw new Regla("Ese estado no existe.");
+      if (pedido.estado === estado) return vista(d, pedido);
+
+      // Cancelar una venta la saca de los totales de su turno, y con eso cambia
+      // el arqueo de un cierre que ya se firmó: el mismo turno pasaría a mostrar
+      // una diferencia que nadie contó. Es la misma regla que impide editarla o
+      // borrarla.
+      exigirCajaEditable(d, pedido, "cambiarle el estado");
+
+      if (estado === "cancelado") {
+        // Se cancela: vuelve el stock. Si el producto ya no está en el
+        // catálogo, el pedido igual se cancela.
+        for (const [productoId, cantidad] of porProducto(pedido.items)) {
+          if (d.productos.some((p) => p.id === productoId)) {
+            ajustarStock(d, productoId, cantidad, `Pedido #${pedido.numero} cancelado`, "devolucion");
+          }
+        }
+      } else if (pedido.estado === "cancelado") {
+        // Se reabre un pedido cancelado: se vuelve a descontar.
+        for (const [productoId, cantidad] of porProducto(pedido.items)) {
+          if (d.productos.some((p) => p.id === productoId)) {
+            ajustarStock(d, productoId, -cantidad, `Pedido #${pedido.numero} reabierto`, "venta");
+          }
+        }
+      }
+
+      pedido.estado = estado;
+      return vista(d, pedido);
+    })
+  );
+
+  r.post("/pedidos/:id/nota", ({ params, cuerpo }) =>
+    a.escribir((d) => {
+      const pedido = d.pedidos.find((p) => p.id === params.id);
+      if (!pedido) throw new Regla("Ese pedido no existe.");
+      pedido.notas = recortar(cuerpo.notas as string, 1000);
+      return vista(d, pedido);
+    })
+  );
+
+  r.put("/pedidos/:id", ({ params, cuerpo }) =>
+    a.escribir((d) => {
+      const pedido = d.pedidos.find((p) => p.id === params.id);
+      if (!pedido) throw new Regla("Ese pedido no existe.");
+
+      if (pedido.estado === "cancelado") {
+        throw new Regla("Un pedido cancelado no se puede editar. Reabrilo primero.");
+      }
+
+      // Una devolución está escrita al revés: cantidades, total y pagos son
+      // negativos, porque es lo que hace que el arqueo y los informes la resten
+      // sin ningún caso especial. Este editor solo sabe escribir ventas —exige
+      // cantidades positivas—, así que guardarla acá la daba vuelta: la
+      // devolución de $20.700 pasaba a sumar $20.700 al cajón, un salto de
+      // $41.400, y el stock se movía para el lado contrario.
+      if (pedido.canal === "devolucion") {
+        throw new Regla(
+          "Una devolución no se edita: sus importes van al revés y guardarla acá los daría vuelta. Borrala y registrala de nuevo."
+        );
+      }
+
+      exigirCajaEditable(d, pedido, "editarla");
+
+      const entradas = Array.isArray(cuerpo.items) ? (cuerpo.items as Record<string, unknown>[]) : [];
+      if (entradas.length === 0) throw new Regla("El pedido tiene que tener al menos un renglón.");
+      if (entradas.length > 60) throw new Regla("No se pueden cargar más de 60 renglones en un pedido.");
+
+      const nuevos: ItemPedido[] = entradas.map((item) => {
+        const nombre = recortarObligatorio(item.nombre as string, 160, "Falta el nombre de un renglón.");
+        const cantidad = entero(item.cantidad, 0);
+        const precio = entero(item.precio, 0);
+
+        if (cantidad <= 0) throw new Regla("La cantidad tiene que ser al menos 1.");
+        if (precio < 0) throw new Regla("Un precio no puede ser negativo.");
+
+        return {
+          id: nuevoId(),
+          productoId: recortar(item.productoId as string, 64),
+          nombre,
+          unidadMedida: recortar(item.unidadMedida as string, 24) ?? "unidad",
+          precio,
+          cantidad,
+        };
+      });
+
+      // Se reconcilia por diferencia y no aplicando cambios de a uno: cambiar
+      // una cantidad y mover un producto a otro renglón son la misma operación
+      // vistas de cerca, y tratarlas por separado deja huecos por los que el
+      // stock se desfasa.
+      const antes = porProducto(pedido.items);
+      const despues = porProducto(nuevos);
+
+      for (const productoId of new Set([...antes.keys(), ...despues.keys()])) {
+        const delta = (despues.get(productoId) ?? 0) - (antes.get(productoId) ?? 0);
+        if (delta === 0) continue;
+        if (!d.productos.some((p) => p.id === productoId)) continue;
+
+        // Más cantidad en el pedido significa menos en la estantería.
+        ajustarStock(
+          d,
+          productoId,
+          -delta,
+          `Edición del pedido #${pedido.numero}`,
+          delta > 0 ? "venta" : "devolucion"
+        );
+      }
+
+      pedido.items = nuevos;
+      pedido.total = nuevos.reduce((s, i) => s + i.precio * i.cantidad, 0);
+      pedido.nombre = recortar(cuerpo.nombre as string, 160) ?? pedido.nombre;
+      pedido.notas = recortar(cuerpo.notas as string, 1000);
+
+      // Si la venta se cobró por caja, el desglose de pagos tiene que seguir
+      // sumando el total: si no, el arqueo daría distinto.
+      if (pedido.pagos.length === 1) {
+        pedido.pagos[0]!.monto = pedido.total;
+      } else if (
+        pedido.pagos.length > 1 &&
+        pedido.pagos.reduce((s, p) => s + p.monto, 0) !== pedido.total
+      ) {
+        throw new Regla(
+          "Esta venta se pagó con varios medios. Anulala y volvé a cobrarla en vez de editarla."
+        );
+      }
+
+      return vista(d, pedido);
+    })
+  );
+
+  r.borrar("/pedidos/:id", ({ params }) =>
+    a.escribir((d) => {
+      const indice = d.pedidos.findIndex((p) => p.id === params.id);
+      if (indice < 0) throw new Regla("Ese pedido no existe.");
+      const pedido = d.pedidos[indice]!;
+
+      exigirCajaEditable(d, pedido, "borrarla");
+
+      if (pedido.estado !== "cancelado") {
+        for (const [productoId, cantidad] of porProducto(pedido.items)) {
+          if (d.productos.some((p) => p.id === productoId)) {
+            ajustarStock(d, productoId, cantidad, `Pedido #${pedido.numero} eliminado`, "devolucion");
+          }
+        }
+      }
+
+      d.pedidos.splice(indice, 1);
+      return { ok: true };
+    })
+  );
+}
+
+// ──────────────────────────────  Ayudas  ──────────────────────────────
+
+/**
+ * Lo que salió de un turno ya cerrado no se toca: su arqueo se hizo con ese
+ * importe y alguien lo dio por bueno.
+ */
+function exigirCajaEditable(d: BaseDatos, pedido: Pedido, accion: string): void {
+  if (!pedido.cajaId) return;
+
+  const caja = d.cajas.find((c) => c.id === pedido.cajaId);
+  if (caja && caja.estado === "cerrada") {
+    throw new Regla(
+      `Esta venta se cobró en el turno ${caja.numero}, que ya se cerró. Registrá una devolución en vez de ${accion}.`
+    );
+  }
+}
+
+function porProducto(items: ItemPedido[]): Map<string, number> {
+  const total = new Map<string, number>();
+  for (const item of items) {
+    if (!item.productoId) continue;
+    total.set(item.productoId, (total.get(item.productoId) ?? 0) + item.cantidad);
+  }
+  return total;
+}
+
+export function vista(d: BaseDatos, p: Pedido) {
+  const caja = p.cajaId ? d.cajas.find((c) => c.id === p.cajaId) : undefined;
+
+  return {
+    id: p.id,
+    numero: p.numero,
+    canal: p.canal,
+    estado: p.estado,
+    nombre: p.nombre,
+    clienteId: p.clienteId,
+    cliente: p.clienteId ? (d.clientes.find((c) => c.id === p.clienteId)?.nombre ?? null) : null,
+    notas: p.notas,
+    total: p.total,
+    metodoPago: p.metodoPago,
+    recibido: p.recibido,
+    cajaId: p.cajaId,
+    cajaNumero: caja?.numero ?? null,
+    cajaAbierta: caja?.estado === "abierta",
+    pagos: p.pagos,
+    items: p.items,
+    unidades: p.items.reduce((s, i) => s + i.cantidad, 0),
+    creadoEn: p.creadoEn,
+  };
+}

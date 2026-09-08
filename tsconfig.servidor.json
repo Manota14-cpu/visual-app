@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // El código se escribe importando `./almacen.ts` —así Node lo ejecuta tal
+    // cual, sin compilar, mientras se desarrolla— y al compilar la extensión se
+    // reescribe a `.js`, que es lo que necesita el paquete.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    "outDir": "dist/servidor",
+    "sourceMap": false,
+    "removeComments": false
+  },
+  "include": ["servidor/**/*.ts"]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "apppack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Panel de stock, caja y ventas. Interfaz en Next, servidor en Node, datos en un JSON local.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "servidor": "node --watch servidor/index.ts -- --no-abrir",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.servidor.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "paquete": "powershell -ExecutionPolicy Bypass -File ./build.ps1"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^2.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.11",
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
+  }
+}
