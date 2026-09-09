@@ -7,7 +7,7 @@ import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../regl
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
 import { latir } from "../vida.ts";
 
-export const VERSION = "1.2.0";
+export const VERSION = "1.2.1";
 
 /**
  * El archivo de datos y lo que se puede hacer con Ã©l.

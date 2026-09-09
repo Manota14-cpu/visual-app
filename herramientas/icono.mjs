@@ -19,10 +19,15 @@ import { dirname } from "node:path";
 
 const TAMANOS = [16, 32, 48, 64, 128, 256];
 
-// El mismo azul del sistema que usa la interfaz, de arriba más claro a abajo
-// más saturado: así el ícono tiene volumen sin dibujarle un brillo encima.
-const ARRIBA = [61, 156, 255];
-const ABAJO = [0, 113, 227];
+// El monograma es negro. Va sobre una baldosa casi blanca y no al revés porque
+// así se lee tal cual es la marca; la baldosa existe para que no se pierda
+// sobre una barra de tareas oscura, donde un trazo negro suelto desaparece.
+const BALDOSA = [250, 250, 250];
+const TINTA = [17, 17, 17];
+
+// Un borde de un pelo, apenas más oscuro que la baldosa. Sin él, el ícono se
+// funde con el fondo blanco del Explorador y parece que flotara.
+const BORDE = [225, 225, 228];
 
 /** Qué tan adentro del rectángulo redondeado está un punto. Negativo es adentro. */
 function distanciaAlCuadrado(x, y, lado, radio) {
@@ -44,15 +49,42 @@ function distanciaAlTrazo(x, y, x1, y1, x2, y2, grosor) {
   return Math.hypot(x - (x1 + t * vx), y - (y1 + t * vy)) - grosor;
 }
 
-/** Los tres trazos de una A: las dos patas y el travesaño. */
+/**
+ * El monograma: una V y una A, pegadas.
+ *
+ * Son seis trazos —dos de la V, dos de la A y su travesaño— con la pata derecha
+ * de la V y la izquierda de la A casi paralelas y muy cerca. Ese encuentro es
+ * lo que hace que se lea como una sola marca y no como dos letras sueltas.
+ *
+ * El trazo es grueso a propósito: a 16 píxeles, que es como se ve en la barra
+ * de tareas, un trazo fino se convierte en un gris sucio.
+ */
 function distanciaALaLetra(x, y, lado) {
   const u = (v) => v * lado; // proporciones, para que escale a cualquier tamaño
-  const grosor = u(0.052);
+  const grosor = u(0.063);
+
+  const alto = 0.290; // dónde empieza arriba
+  const piso = 0.730; // dónde termina abajo
+
+  // Los remates son planos, no redondeados. La distancia a un segmento da una
+  // punta con forma de cápsula; cortándola contra la franja de la letra —quedarse
+  // con lo que está adentro de las dos formas— el trazo termina en un filo recto,
+  // que es lo que hace que la marca se lea dibujada y no escrita a mano.
+  const franja = Math.max(u(alto) - y, y - u(piso));
+  const recto = (x1, y1, x2, y2, ancho = grosor) =>
+    Math.max(distanciaAlTrazo(x, y, x1, y1, x2, y2, ancho), franja);
 
   return Math.min(
-    distanciaAlTrazo(x, y, u(0.5), u(0.235), u(0.295), u(0.755), grosor),
-    distanciaAlTrazo(x, y, u(0.5), u(0.235), u(0.705), u(0.755), grosor),
-    distanciaAlTrazo(x, y, u(0.375), u(0.605), u(0.625), u(0.605), grosor)
+    // V
+    recto(u(0.206), u(alto), u(0.368), u(piso)),
+    recto(u(0.530), u(alto), u(0.368), u(piso)),
+    // A, corrida hacia la izquierda hasta casi tocar la V: ese encuentro es lo
+    // que hace que se lea como una marca y no como dos letras sueltas.
+    recto(u(0.678), u(alto), u(0.538), u(piso)),
+    recto(u(0.678), u(alto), u(0.793), u(piso)),
+    // El travesaño, abajo del centro. Sin él, la A se confunde con una segunda
+    // V justo en el tamaño en que menos se puede dudar: el de la barra de tareas.
+    recto(u(0.567), u(0.645), u(0.770), u(0.645), grosor * 0.88)
   );
 }
 
@@ -70,15 +102,19 @@ function dibujar(lado) {
       const px = x + 0.5;
       const py = y + 0.5;
 
-      const fondo = cobertura(distanciaAlCuadrado(px, py, lado, radio));
+      const distancia = distanciaAlCuadrado(px, py, lado, radio);
+      const fondo = cobertura(distancia);
       if (fondo <= 0) continue;
 
-      const mezcla = py / lado;
+      // El borde es el anillo de afuera de la baldosa: cuanto más cerca del
+      // filo, más se acerca al gris. Se apaga en los tamaños chicos, donde un
+      // pelo de borde solo ensucia.
+      const anillo = lado >= 48 ? cobertura(distancia + lado * 0.02) : 0;
       const letra = cobertura(distanciaALaLetra(px, py, lado));
 
       const canal = (i) => {
-        const base = ARRIBA[i] + (ABAJO[i] - ARRIBA[i]) * mezcla;
-        return Math.round(base + (255 - base) * letra);
+        const base = BORDE[i] + (BALDOSA[i] - BORDE[i]) * anillo;
+        return Math.round(base + (TINTA[i] - base) * letra);
       };
 
       const p = (y * lado + x) * 4;

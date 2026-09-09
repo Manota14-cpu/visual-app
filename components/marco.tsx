@@ -20,6 +20,40 @@ const secciones: { nombre: string; href: string; icono: NombreIcono }[] = [
 ];
 
 /**
+ * El monograma, dibujado con las mismas proporciones que el ícono del programa.
+ *
+ * Va suelto sobre el fondo, sin la baldosa que sí lleva el ícono: ahí la
+ * baldosa existe para que la marca no se pierda sobre una barra de tareas
+ * oscura, y acá el fondo es el de la aplicación y siempre es claro.
+ *
+ * Los trazos se recortan contra una franja horizontal para que los remates
+ * queden planos, que es como es la marca.
+ */
+function Marca() {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      className="h-9 w-9 shrink-0 text-tinta"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <clipPath id="marca-franja">
+        <rect x="0" y="18.56" width="64" height="28.16" />
+      </clipPath>
+      <g clipPath="url(#marca-franja)" stroke="currentColor" fill="none" strokeLinecap="butt">
+        <g strokeWidth="8.06">
+          <path d="M13.18 18.56 L23.55 46.72" />
+          <path d="M33.92 18.56 L23.55 46.72" />
+          <path d="M43.39 18.56 L34.43 46.72" />
+          <path d="M43.39 18.56 L50.75 46.72" />
+        </g>
+        <path d="M36.29 41.28 L49.28 41.28" strokeWidth="7.09" />
+      </g>
+    </svg>
+  );
+}
+
+/**
  * El marco de todas las pantallas: la navegación y el encabezado.
  *
  * La columna y la barra de arriba son de vidrio esmerilado: el contenido pasa
@@ -53,12 +87,7 @@ export function Marco({
         aria-label="Navegación principal"
       >
         <Link href="/panel" className="mb-7 flex items-center gap-2.5 px-2">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-b from-[#3D9CFF] to-[#0071E3] font-titulo text-medio font-semibold text-white shadow-acento"
-            aria-hidden="true"
-          >
-            A
-          </span>
+          <Marca />
           <span className="min-w-0">
             <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual App</span>
             <span className="block truncate text-micro text-tinta-tenue">

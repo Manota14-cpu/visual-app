@@ -1,11 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="14" fill="#1A1A18" />
-  <text
-    x="32"
-    y="45"
-    text-anchor="middle"
-    font-family="Iowan Old Style, Palatino Linotype, Georgia, serif"
-    font-size="38"
-    fill="#FBFBFA"
-  >A</text>
+  <!--
+    El mismo monograma que dibuja herramientas/icono.mjs, con las mismas
+    proporciones. Los remates son planos: los trazos se recortan contra una
+    franja horizontal, porque un extremo perpendicular al trazo deja la
+    diagonal en punta y la marca se lee escrita a mano en vez de dibujada.
+  -->
+  <defs>
+    <clipPath id="franja">
+      <rect x="0" y="18.56" width="64" height="28.16" />
+    </clipPath>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="63" height="63" rx="14" fill="#FAFAFA" stroke="#E1E1E4" />
+
+  <g clip-path="url(#franja)" stroke="#111111" fill="none" stroke-linecap="butt">
+    <g stroke-width="8.06">
+      <path d="M13.18 18.56 L23.55 46.72" />
+      <path d="M33.92 18.56 L23.55 46.72" />
+      <path d="M43.39 18.56 L34.43 46.72" />
+      <path d="M43.39 18.56 L50.75 46.72" />
+    </g>
+    <path d="M36.29 41.28 L49.28 41.28" stroke-width="7.09" />
+  </g>
 </svg>
