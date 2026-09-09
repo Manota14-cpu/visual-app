@@ -3,7 +3,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 /**
- * Genera el ícono de AppPack.
+ * Genera el ícono de Visual App.
  *
  * Windows necesita un .ico para el acceso directo, y un .ico es un contenedor
  * de imágenes: se dibuja el mismo símbolo en seis tamaños y se los mete a
@@ -14,7 +14,7 @@ import { dirname } from "node:path";
  * son cien líneas, no agrega una dependencia al proyecto y el resultado no
  * depende de que la máquina tenga instalada una fuente.
  *
- *   node herramientas/icono.mjs dist/AppPack.ico
+ *   node herramientas/icono.mjs dist/Visual App.ico
  */
 
 const TAMANOS = [16, 32, 48, 64, 128, 256];
@@ -219,7 +219,7 @@ function comoIco(imagenes) {
 
 // ─────────────────────────────  Salida  ─────────────────────────────
 
-const destino = process.argv[2] ?? "dist/AppPack.ico";
+const destino = process.argv[2] ?? "dist/Visual App.ico";
 mkdirSync(dirname(destino), { recursive: true });
 
 if (destino.toLowerCase().endsWith(".png")) {

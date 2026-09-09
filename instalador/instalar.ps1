@@ -1,5 +1,5 @@
 ﻿# =====================================================================
-#  Instalador de AppPack
+#  Instalador de Visual App
 # =====================================================================
 #  Un asistente con ventana, como el de cualquier programa: pantalla de
 #  bienvenida, barra de progreso y aviso de finalizado.
@@ -23,13 +23,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $origen = $PSScriptRoot
-$datos = "$env:LOCALAPPDATA\AppPack"
-$clave = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AppPack"
+$datos = "$env:LOCALAPPDATA\Visual App"
+$clave = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VisualApp"
 
 # La carpeta del usuario es la que evita el cartel de administrador, así que es
 # la que se propone. Elegir otra se puede, y más abajo está lo que hace falta
 # para que eso no termine mal.
-$porDefecto = "$env:LOCALAPPDATA\Programs\AppPack"
+$porDefecto = "$env:LOCALAPPDATA\Programs\Visual App"
 
 <#
     Dónde está instalado hoy, según Windows.
@@ -71,7 +71,7 @@ $script:yaEstaba = $null -ne $yaInstalado
 
     Esto existe por el desinstalador: borra la carpeta del programa entera. Si
     alguien eligiera "Documentos", desinstalar se llevaría Documentos. Por eso
-    NUNCA se instala en la carpeta que se elige, sino en una AppPack adentro —es
+    NUNCA se instala en la carpeta que se elige, sino en una Visual App adentro —es
     lo que hace cualquier instalador— y además se rechaza lo que no puede
     terminar bien.
 #>
@@ -92,7 +92,7 @@ function RevisarDestino($ruta) {
         }
     }
 
-    # Si la carpeta ya existe y tiene cosas que no son de AppPack, no se toca:
+    # Si la carpeta ya existe y tiene cosas que no son de Visual App, no se toca:
     # el desinstalador la borraría entera con todo lo que haya adentro.
     if ((Test-Path $completa) -and -not (Test-Path (Join-Path $completa "servidor\index.js"))) {
         if (@(Get-ChildItem $completa -Force -ErrorAction SilentlyContinue).Count -gt 0) {
@@ -143,10 +143,10 @@ function CerrarLoAbierto {
     # que no eran tales.
     #
     # La ventana se reconoce por el perfil que usa, que vive en la carpeta de
-    # datos: así se cierra la de AppPack y no las pestañas de nadie.
+    # datos: así se cierra la de Visual App y no las pestañas de nadie.
     $perfil = Join-Path $datos "ventana"
 
-    # Se busca por RUTA COMPLETA, no por la palabra "AppPack" suelta en la línea
+    # Se busca por RUTA COMPLETA, no por la palabra "Visual App" suelta en la línea
     # de comandos. Buscar por texto suelto ya se llevó puesto un proceso ajeno
     # que solo mencionaba el nombre; acá se apunta a las dos carpetas de las que
     # el programa puede estar corriendo —la instalada y la del paquete— y a
@@ -198,7 +198,7 @@ function CopiarPrograma {
     }
     New-Item -ItemType Directory -Path $enObra -Force | Out-Null
 
-    $partes = @("servidor", "sitio", "Abrir AppPack.cmd", "abrir.ps1", "AppPack.ico", "desinstalar.ps1")
+    $partes = @("servidor", "sitio", "Abrir Visual App.cmd", "abrir.ps1", "Visual App.ico", "desinstalar.ps1")
     $archivos = @()
     foreach ($parte in $partes) {
         $ruta = Join-Path $origen $parte
@@ -258,10 +258,44 @@ function LoQueFalta {
         "sitio\index.html",
         "abrir.ps1",
         "desinstalar.ps1",
-        "Abrir AppPack.cmd"
+        "Abrir Visual App.cmd"
     )
 
     return @($necesarios | Where-Object { -not (Test-Path (Join-Path $origen $_)) })
+}
+
+<#
+    Saca lo que quedó del nombre viejo.
+
+    El programa se llamaba AppPack. Sin esto, después de instalar quedarían dos
+    entradas en "Aplicaciones instaladas", dos accesos directos en el escritorio
+    y una carpeta de programa muerta ocupando lugar — y nadie sabría cuál de las
+    dos abrir.
+
+    La carpeta de DATOS no se toca: de mudarla se encarga el propio programa al
+    arrancar, que es quien sabe si ya hay datos nuevos.
+#>
+function LimpiarNombreViejo {
+    $viejaClave = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AppPack"
+    $viejaCarpeta = (Get-ItemProperty $viejaClave -ErrorAction SilentlyContinue).InstallLocation
+    if (-not $viejaCarpeta) { $viejaCarpeta = "$env:LOCALAPPDATA\Programs\AppPack" }
+
+    foreach ($acceso in @(
+        (Join-Path ([Environment]::GetFolderPath("Programs")) "AppPack.lnk"),
+        (Join-Path ([Environment]::GetFolderPath("Desktop")) "AppPack.lnk")
+    )) {
+        if (Test-Path $acceso) { Remove-Item $acceso -Force -ErrorAction SilentlyContinue }
+    }
+
+    if (Test-Path $viejaClave) { Remove-Item $viejaClave -Recurse -Force -ErrorAction SilentlyContinue }
+
+    # Solo si es de verdad la instalación vieja y no la de ahora: borrar una
+    # carpeta entera pide estar seguro de cuál.
+    if ($viejaCarpeta -and
+        ($viejaCarpeta.TrimEnd('\') -ne $script:destino.TrimEnd('\')) -and
+        (Test-Path (Join-Path $viejaCarpeta "servidor\index.js"))) {
+        Remove-Item $viejaCarpeta -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 <# Que lo instalado se pueda abrir. Se corre al final, antes de cantar victoria. #>
@@ -276,12 +310,12 @@ function CrearAccesos {
     param([bool]$EnElEscritorio)
 
     $shell = New-Object -ComObject WScript.Shell
-    $icono = Join-Path $destino "AppPack.ico"
-    $programa = Join-Path $destino "Abrir AppPack.cmd"
+    $icono = Join-Path $destino "Visual App.ico"
+    $programa = Join-Path $destino "Abrir Visual App.cmd"
 
-    $lugares = @((Join-Path ([Environment]::GetFolderPath("Programs")) "AppPack.lnk"))
+    $lugares = @((Join-Path ([Environment]::GetFolderPath("Programs")) "Visual App.lnk"))
     if ($EnElEscritorio) {
-        $lugares += (Join-Path ([Environment]::GetFolderPath("Desktop")) "AppPack.lnk")
+        $lugares += (Join-Path ([Environment]::GetFolderPath("Desktop")) "Visual App.lnk")
     }
 
     foreach ($lugar in $lugares) {
@@ -296,12 +330,12 @@ function CrearAccesos {
 
 function AnotarEnWindows {
     $peso = [math]::Round((Get-ChildItem $destino -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1KB)
-    $icono = Join-Path $destino "AppPack.ico"
+    $icono = Join-Path $destino "Visual App.ico"
 
     New-Item -Path $clave -Force | Out-Null
-    Set-ItemProperty $clave "DisplayName"     "AppPack"
+    Set-ItemProperty $clave "DisplayName"     "Visual App"
     Set-ItemProperty $clave "DisplayVersion"  $version
-    Set-ItemProperty $clave "Publisher"       "AppPack"
+    Set-ItemProperty $clave "Publisher"       "Visual App"
     Set-ItemProperty $clave "InstallLocation" $destino
     Set-ItemProperty $clave "DisplayIcon"     $icono
     Set-ItemProperty $clave "EstimatedSize"   $peso -Type DWord
@@ -317,8 +351,8 @@ function AnotarEnWindows {
     Set-ItemProperty $clave "QuietUninstallString" "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$destino\desinstalar.ps1`" -Silencioso"
 }
 
-function AbrirAppPack {
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$destino\Abrir AppPack.cmd`""
+function AbrirVisualApp {
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$destino\Abrir Visual App.cmd`""
 }
 
 # ─────────────────────────────  Sin ventana  ─────────────────────────────
@@ -338,6 +372,9 @@ if ($Silencioso) {
     AnotarEnWindows
 
     if (-not (QuedoBien)) { exit 3 }
+
+    # Recién cuando lo nuevo está entero y comprobado se saca lo viejo.
+    LimpiarNombreViejo
     exit 0
 }
 
@@ -392,7 +429,7 @@ function Letra($tamano, $estilo = [System.Drawing.FontStyle]::Regular) {
 }
 
 $ventana = New-Object System.Windows.Forms.Form
-$ventana.Text = $(if ($script:yaEstaba) { "Actualizar AppPack" } else { "Instalar AppPack" })
+$ventana.Text = $(if ($script:yaEstaba) { "Actualizar Visual App" } else { "Instalar Visual App" })
 $ventana.ClientSize = New-Object System.Drawing.Size(600, 420)
 $ventana.FormBorderStyle = "FixedDialog"
 $ventana.StartPosition = "CenterScreen"
@@ -401,7 +438,7 @@ $ventana.MinimizeBox = $false
 $ventana.BackColor = $Blanco
 $ventana.Font = Letra 9.75
 
-$rutaIcono = Join-Path $origen "AppPack.ico"
+$rutaIcono = Join-Path $origen "Visual App.ico"
 if (Test-Path $rutaIcono) {
     $iconoArchivo = New-Object System.Drawing.Icon($rutaIcono)
     $ventana.Icon = $iconoArchivo
@@ -415,7 +452,7 @@ if (Test-Path $rutaIcono) {
 }
 
 $titulo = New-Object System.Windows.Forms.Label
-$titulo.Text = "AppPack"
+$titulo.Text = "Visual App"
 $titulo.Font = Letra 19 ([System.Drawing.FontStyle]::Regular)
 $titulo.ForeColor = $Tinta
 $titulo.Location = New-Object System.Drawing.Point(108, 32)
@@ -500,17 +537,17 @@ $node = BuscarNode
 <#
     Elegir dónde instalar.
 
-    Se elige la carpeta PADRE y el programa va en una AppPack adentro. No es un
+    Se elige la carpeta PADRE y el programa va en una Visual App adentro. No es un
     capricho de forma: el desinstalador borra la carpeta del programa entera, y
     si el destino fuera la carpeta elegida a secas, desinstalar desde
     "Documentos" se llevaría Documentos.
 
-    Si lo que se elige ya es una instalación de AppPack, se usa tal cual: es
+    Si lo que se elige ya es una instalación de Visual App, se usa tal cual: es
     alguien apuntando a donde ya está.
 #>
 function ElegirCarpeta {
     $selector = New-Object System.Windows.Forms.FolderBrowserDialog
-    $selector.Description = "Elegí dónde crear la carpeta AppPack"
+    $selector.Description = "Elegí dónde crear la carpeta Visual App"
     $selector.ShowNewFolderButton = $true
 
     $actual = Split-Path $script:destino -Parent
@@ -522,7 +559,7 @@ function ElegirCarpeta {
     $propuesta = if (Test-Path (Join-Path $elegida "servidor\index.js")) {
         $elegida
     } else {
-        Join-Path $elegida "AppPack"
+        Join-Path $elegida "Visual App"
     }
 
     $problema = RevisarDestino $propuesta
@@ -532,7 +569,7 @@ function ElegirCarpeta {
 
     if ($problema) {
         [System.Windows.Forms.MessageBox]::Show(
-            $problema, "AppPack",
+            $problema, "Visual App",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
         return
@@ -559,7 +596,7 @@ function MostrarBienvenida {
 
     if (-not $node) {
         $cuerpo.Controls.Add((Texto "Falta Node.js" 36 28 500 26 $Rojo (Letra 12)))
-        $cuerpo.Controls.Add((Texto ("AppPack lo necesita para funcionar. Es gratis, lo publica la fundación OpenJS " +
+        $cuerpo.Controls.Add((Texto ("Visual App lo necesita para funcionar. Es gratis, lo publica la fundación OpenJS " +
             "y se instala en un minuto. Después de instalarlo, volvé a abrir este asistente.") 36 60 520 56 $Suave $null))
 
         $instalarNode = New-Object System.Windows.Forms.Button
@@ -633,14 +670,14 @@ function MostrarBienvenida {
     $cuerpo.Controls.Add($script:conEscritorio)
 
     $script:abrirAlFinal = New-Object System.Windows.Forms.CheckBox
-    $script:abrirAlFinal.Text = "Abrir AppPack al terminar"
+    $script:abrirAlFinal.Text = "Abrir Visual App al terminar"
     $script:abrirAlFinal.Checked = $true
     $script:abrirAlFinal.Location = New-Object System.Drawing.Point(34, 124)
     $script:abrirAlFinal.Size = New-Object System.Drawing.Size(500, 26)
     $cuerpo.Controls.Add($script:abrirAlFinal)
 
     $cierre = if ($script:yaEstaba) {
-        "Si AppPack está abierto se cierra solo para actualizarlo. Tus datos no se tocan: " +
+        "Si Visual App está abierto se cierra solo para actualizarlo. Tus datos no se tocan: " +
         "viven aparte del programa, en $datos."
     } else {
         "No hace falta ser administrador. Tus datos se guardan aparte del programa, " +
@@ -677,8 +714,8 @@ function MostrarFinal {
     $cuerpo.Controls.Clear()
 
     $verbo = if ($script:yaEstaba) { "actualizó" } else { "instaló" }
-    $cuerpo.Controls.Add((Texto "AppPack se $verbo" 36 40 520 30 $Tinta (Letra 14)))
-    $cuerpo.Controls.Add((Texto ("Se abre desde el escritorio o buscando AppPack en el menú Inicio. " +
+    $cuerpo.Controls.Add((Texto "Visual App se $verbo" 36 40 520 30 $Tinta (Letra 14)))
+    $cuerpo.Controls.Add((Texto ("Se abre desde el escritorio o buscando Visual App en el menú Inicio. " +
         "Aparece en su propia ventana; cerrarla apaga el programa.") 36 78 524 46 $Suave $null))
     $cuerpo.Controls.Add((Texto ("Tus datos quedan en $datos. Para desinstalarlo: Configuración, " +
         "Aplicaciones, Aplicaciones instaladas.") 36 132 524 46 $Suave (Letra 9)))
@@ -695,7 +732,7 @@ $script:paso = "bienvenida"
 
 $aceptar.Add_Click({
     if ($script:paso -eq "final") {
-        if ($script:abrirAlFinal.Checked) { AbrirAppPack }
+        if ($script:abrirAlFinal.Checked) { AbrirVisualApp }
         $ventana.Close()
         return
     }
@@ -721,6 +758,9 @@ $aceptar.Add_Click({
         if (-not (QuedoBien)) {
             throw "La copia terminó pero faltan archivos en $destino. Probá de nuevo."
         }
+
+        # Recién cuando lo nuevo está entero y comprobado se saca lo viejo.
+        LimpiarNombreViejo
 
         $script:paso = "final"
         MostrarFinal

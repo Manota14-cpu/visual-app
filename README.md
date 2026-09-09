@@ -1,4 +1,4 @@
-# AppPack
+# Visual App
 
 Panel de stock, caja y ventas para un negocio chico. Corre en la propia
 computadora: un servidor local sirve la interfaz, atiende la API y guarda todo
@@ -8,10 +8,10 @@ No hay base de datos que instalar, ni cuenta en la nube, ni conexión a internet
 Se abre con doble clic y se cierra cerrando la ventana.
 
 ```
-Abrir AppPack.cmd
+Abrir Visual App.cmd
    ├── servidor/   Node: API y reglas del negocio     escucha en 127.0.0.1
    ├── sitio/      la interfaz de Next ya compilada
-   └── datos.json  %LOCALAPPDATA%\AppPack\
+   └── datos.json  %LOCALAPPDATA%\Visual App\
 ```
 
 ## Se abre como una aplicación, no como una página
@@ -30,7 +30,7 @@ Windows la agrupa como un programa distinto. Si no hubiera ninguno de los dos
 que sigue abierta; si pasa un minuto y medio sin noticias, el servidor se apaga
 solo. El margen es generoso a propósito: una computadora que se suspende no tiene
 que voltear el servidor con una venta a medio cobrar. Para apagarlo en el momento
-está *Configuración → Cerrar AppPack*.
+está *Configuración → Cerrar Visual App*.
 
 ## Armarlo
 
@@ -51,15 +51,15 @@ Deja la carpeta `dist` (1,4 MB), que es a la vez el instalador y el programa.
 ## Instalarlo en una computadora
 
 Se copia la carpeta `dist` a la máquina y se hace doble clic en
-**`Instalar AppPack.cmd`**. Se abre un asistente con ventana —bienvenida, barra
+**`Instalar Visual App.cmd`**. Se abre un asistente con ventana —bienvenida, barra
 de progreso y aviso de finalizado— que:
 
-- copia el programa a `%LOCALAPPDATA%\Programs\AppPack`;
+- copia el programa a `%LOCALAPPDATA%\Programs\Visual App`;
 - deja un acceso directo en el menú Inicio y, si se deja tildado, en el
   escritorio, con su ícono;
 - lo anota en *Configuración → Aplicaciones → Aplicaciones instaladas*, con su
   desinstalador;
-- ofrece abrir AppPack al terminar.
+- ofrece abrir Visual App al terminar.
 
 Si falta Node.js, el asistente lo dice en la primera pantalla y ofrece
 instalarlo ahí mismo en vez de fallar a mitad de camino.
@@ -70,11 +70,11 @@ pelear con los permisos de «Archivos de programa».
 
 ### Elegir dónde se instala
 
-El asistente propone `%LOCALAPPDATA%\Programs\AppPack` y tiene un botón
+El asistente propone `%LOCALAPPDATA%\Programs\Visual App` y tiene un botón
 *Cambiar…* para llevarlo a otro lado —otro disco, normalmente—. Tres cosas que
 no son detalles de forma:
 
-- **Se elige la carpeta padre, y el programa va en una `AppPack` adentro.** El
+- **Se elige la carpeta padre, y el programa va en una `Visual App` adentro.** El
   desinstalador borra la carpeta del programa entera y sin preguntar: si el
   destino fuera la carpeta elegida a secas, desinstalar desde «Documentos» se
   llevaría Documentos. Además se rechaza la raíz de un disco, las carpetas del
@@ -91,15 +91,15 @@ no son detalles de forma:
   mismo, borra la carpeta donde él está.
 
 Antes de borrar, el desinstalador comprueba que la carpeta sea de verdad una
-instalación de AppPack —que tenga `servidor\index.js` adentro—. Es barato y es
+instalación de Visual App —que tenga `servidor\index.js` adentro—. Es barato y es
 lo único que separa «desinstalar» de «borrar lo que haya en esa ruta».
 
 Reinstalar encima actualiza la versión: el asistente se da cuenta de que ya está
-instalado y lo dice —«Actualizar AppPack», con la versión a la que va—, cierra la
+instalado y lo dice —«Actualizar Visual App», con la versión a la que va—, cierra la
 copia abierta, reemplaza los archivos y deja los datos intactos.
 
 **Actualizar no puede dejar a nadie sin programa.** La copia nueva se arma al
-lado, en `AppPack.nuevo`, y recién cuando está entera reemplaza a la anterior con
+lado, en `Visual App.nuevo`, y recién cuando está entera reemplaza a la anterior con
 un cambio de nombre, que es instantáneo. Antes se borraba lo viejo y después se
 copiaba encima: si la copia se cortaba a la mitad —el disco lleno, el antivirus
 tomando un archivo, un pendrive que se desconecta— no quedaba ni lo uno ni lo
@@ -111,7 +111,7 @@ archivos que no encontraba los salteaba— y el programa fallaba después, lejos
 ahí, con un error que no señalaba a nadie.
 
 **Cerrar lo que está abierto se hace por ruta, no por nombre.** Se buscaban
-procesos cuya línea de comandos mencionara «AppPack», y eso alcanza para
+procesos cuya línea de comandos mencionara «Visual App», y eso alcanza para
 llevarse puesto cualquier proceso ajeno que solo nombre la palabra — pasó en una
 prueba, con la terminal desde la que se estaba probando. Ahora se apunta a la
 carpeta instalada y a la del paquete. Además se cierra el lanzador **antes** que
@@ -120,10 +120,10 @@ programa se cayó y saca un cartel de error en medio de una actualización que
 salió bien.
 
 **Al desinstalar, los datos no se borran.** El catálogo, las ventas y los turnos
-son del negocio, no del programa: quedan en `%LOCALAPPDATA%\AppPack` y el
+son del negocio, no del programa: quedan en `%LOCALAPPDATA%\Visual App` y el
 desinstalador dice dónde, para copiarlos o borrarlos a mano.
 
-También se puede usar sin instalar nada: **`Abrir AppPack.cmd`** abre el mismo
+También se puede usar sin instalar nada: **`Abrir Visual App.cmd`** abre el mismo
 programa desde donde esté la carpeta.
 
 ## Que la versión nueva llegue sola
@@ -138,17 +138,17 @@ cuál es la última versión, y si hay una más nueva lo ofrece en
 ```bash
 powershell -ExecutionPolicy Bypass -File .\build.ps1 `
   -Notas "Qué cambió, en una línea" `
-  -Descargas "https://github.com/Manota14-cpu/apppack-escritorio/releases/latest/download/apppack.zip"
+  -Descargas "https://github.com/Manota14-cpu/visual-app/releases/latest/download/visual-app.zip"
 ```
 
-Eso deja `publicar\` con dos archivos —`apppack.zip` y `version.json`— para
+Eso deja `publicar\` con dos archivos —`visual-app.zip` y `version.json`— para
 subir como adjuntos de una publicación nueva del repositorio. Los nombres no
 llevan la versión a propósito: `releases/latest/download/<archivo>` apunta
 siempre a la última publicación, así que la dirección nunca cambia y las copias
 instaladas no tienen nada que reconfigurar.
 
 La dirección que consultan esas copias está en `servidor/actualizacion.ts`
-(`ORIGEN`) y se puede pisar con la variable `APPPACK_ACTUALIZACIONES`. Mientras
+(`ORIGEN`) y se puede pisar con la variable `VISUALAPP_ACTUALIZACIONES`. Mientras
 diga `USUARIO/REPO` la comprobación queda apagada: sin una dirección de verdad
 no hay a quién preguntarle, y molestar con un error cada día por algo que nadie
 configuró es peor que no hacer nada.
@@ -169,7 +169,7 @@ configuró es peor que no hacer nada.
   llama a `instalar.ps1`, con su copia al lado y su reemplazo atómico.
 
 Un detalle que costó encontrar: **el actualizador se lanza con `cmd /c start`,
-no con `detached`**. Lo primero que hace es cerrar AppPack, o sea a quien lo
+no con `detached`**. Lo primero que hace es cerrar Visual App, o sea a quien lo
 llamó; con `detached` a secas se moría junto con él y la actualización quedaba a
 mitad de camino — el paquete bajado y verificado, y el programa sin reemplazar.
 Y corre desde la carpeta del paquete nuevo, que es la única que la instalación
@@ -206,7 +206,7 @@ Lo fue, y no se pudo usar. Windows 11 trae **Control de aplicaciones inteligente
 también los `.dll` que ese ejecutable cargue. El registro de eventos lo dice
 sin vueltas:
 
-> Code Integrity determined that a process attempted to load `AppPack.dll` that
+> Code Integrity determined that a process attempted to load `Visual App.dll` that
 > did not meet the Enterprise signing level requirements
 
 Firmar cuesta un certificado de una autoridad reconocida. Node, en cambio, ya
@@ -301,7 +301,7 @@ macOS.
 
 ## Decisiones que conviene conocer
 
-**Los datos son un archivo.** `%LOCALAPPDATA%\AppPack\datos.json`, con sangría y
+**Los datos son un archivo.** `%LOCALAPPDATA%\Visual App\datos.json`, con sangría y
 tildes, abrible con el Bloc de notas. Copiarlo a un pendrive es todo el respaldo;
 ponerlo en otra computadora es toda la mudanza. Desde *Configuración* se puede
 hacer una copia fechada o abrir la carpeta.
@@ -381,7 +381,7 @@ el resultado del período resta los gastos operativos y no las compras.
 margen daría 100% y el valor del inventario mentiría sin que nada avise.
 
 **Una sola instancia.** Dos procesos escribiendo el mismo archivo lo dejarían con
-lo que guardó el último. Si el puerto ya está tomado por otra copia de AppPack,
+lo que guardó el último. Si el puerto ya está tomado por otra copia de Visual App,
 la segunda no arranca: trae al frente la ventana que ya estaba.
 
 **Escuchar en 127.0.0.1 no alcanza para estar cerrado.** Cualquier página web
@@ -403,7 +403,7 @@ de restar. Se borra y se registra de nuevo desde la caja.
 **Abrir otro programa no puede apagar este.** Un `spawn` que falla no lanza una
 excepción: avisa con un evento `error`, y un evento `error` que nadie escucha
 termina el proceso. Envuelto en `try/catch` parecía cubierto y no lo estaba. Que
-no abra el explorador de archivos es un incordio; que se apague AppPack con una
+no abra el explorador de archivos es un incordio; que se apague Visual App con una
 venta a medio cobrar, no.
 
 **Del diálogo, solo el fondo cierra.** Un clic sobre el fondo de un `<dialog>`

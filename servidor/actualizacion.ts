@@ -41,8 +41,8 @@ import { VERSION } from "./api/sistema.ts";
  * algo que nadie configuró es peor que no hacer nada.
  */
 export const ORIGEN =
-  process.env.APPPACK_ACTUALIZACIONES ??
-  "https://github.com/Manota14-cpu/apppack-escritorio/releases/latest/download/version.json";
+  process.env.VISUALAPP_ACTUALIZACIONES ??
+  "https://github.com/Manota14-cpu/visual-app/releases/latest/download/version.json";
 
 export const CONFIGURADO = !ORIGEN.includes("USUARIO/REPO");
 
@@ -204,7 +204,7 @@ async function bajar(aviso: Aviso): Promise<string> {
     );
   }
 
-  const zip = path.join(carpeta, `apppack-${aviso.version}.zip`);
+  const zip = path.join(carpeta, `visual-app-${aviso.version}.zip`);
   fs.writeFileSync(zip, datos);
   return zip;
 }
@@ -226,7 +226,7 @@ function correr(argumentos: string[]): Promise<void> {
  * Instala la versión nueva y vuelve a abrir el programa.
  *
  * El que instala tiene que sobrevivir a este proceso: lo primero que hace el
- * instalador es cerrar AppPack, o sea, a quien lo llamó. Por eso se lanza suelto
+ * instalador es cerrar Visual App, o sea, a quien lo llamó. Por eso se lanza suelto
  * —fuera de este árbol de procesos— y desde la carpeta del paquete nuevo, que
  * es la única que la instalación no va a tocar.
  */
@@ -251,7 +251,7 @@ export async function aplicar(): Promise<{ version: string }> {
 
   // Se lanza a través de `start` y no con `detached` a secas.
   //
-  // `detached` no alcanza: probado, el actualizador se moría junto con AppPack
+  // `detached` no alcanza: probado, el actualizador se moría junto con Visual App
   // apenas este se apagaba, y la actualización quedaba a mitad de camino —el
   // paquete bajado y verificado, y el programa sin reemplazar—. `start` crea un
   // proceso de verdad independiente, que es lo mismo que hace el lanzador de la

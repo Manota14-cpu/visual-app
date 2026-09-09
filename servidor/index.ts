@@ -24,7 +24,7 @@ import { rutasSistema } from "./api/sistema.ts";
 import { rutasTraspaso } from "./api/traspaso.ts";
 
 // =====================================================================
-// AppPack — panel de stock, caja y ventas.
+// Visual App — panel de stock, caja y ventas.
 //
 // Un servidor chico que atiende en la propia computadora: sirve la interfaz
 // ya compilada, expone la API y guarda todo en un archivo JSON. No hay base
@@ -61,7 +61,7 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
   // Solo atiende a quien entró por la puerta de casa. Ver `esLocal`.
   if (!esLocal(req.headers.host) || !esLocal(req.headers.origin)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("AppPack solo atiende pedidos de esta computadora.");
+    res.end("Visual App solo atiende pedidos de esta computadora.");
     return;
   }
 
@@ -136,12 +136,12 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
  * Se miran las dos cabeceras que el navegador escribe y una página no puede
  * falsificar:
  *
- * - `Origin` dice de qué sitio salió el pedido. La interfaz de AppPack manda
+ * - `Origin` dice de qué sitio salió el pedido. La interfaz de Visual App manda
  *   `http://localhost:5177`; una página de internet manda su propio dominio.
  *   Cuando no viene —una navegación normal, o `curl`— no hay sitio del que
  *   defenderse.
  * - `Host` es el nombre por el que se llegó, y cierra la otra puerta: un
- *   dominio que apunta a 127.0.0.1 haría que el navegador considere a AppPack
+ *   dominio que apunta a 127.0.0.1 haría que el navegador considere a Visual App
  *   "el mismo sitio" y deje leer las respuestas.
  */
 function esLocal(valor: string | undefined): boolean {
@@ -155,7 +155,7 @@ arrancar(opciones.puerto);
 /**
  * Levanta el servidor, corriéndose de puerto si hace falta.
  *
- * Si el puerto está ocupado por OTRA copia de AppPack, no se abre una segunda:
+ * Si el puerto está ocupado por OTRA copia de Visual App, no se abre una segunda:
  * dos procesos escribiendo el mismo archivo lo dejarían con lo que guardó el
  * último, y perder las ventas de un turno por hacer doble clic dos veces no es
  * un error aceptable. Se trae al frente la ventana que ya estaba y listo.
@@ -163,13 +163,13 @@ arrancar(opciones.puerto);
 function arrancar(puerto: number, intentos = 0): void {
   servidor.once("error", (error: NodeJS.ErrnoException) => {
     if (error.code !== "EADDRINUSE" || intentos > 40) {
-      console.error("No se pudo abrir AppPack:", error.message);
+      console.error("No se pudo abrir Visual App:", error.message);
       process.exit(1);
     }
 
     void (async () => {
-      if (await esAppPack(puerto)) {
-        console.log("AppPack ya está abierto. Se muestra la ventana que ya estaba.");
+      if (await esVisualApp(puerto)) {
+        console.log("Visual App ya está abierto. Se muestra la ventana que ya estaba.");
         if (!opciones.noAbrir) abrirVentana(`http://localhost:${puerto}`, opciones.carpeta);
         process.exit(0);
       }
@@ -182,7 +182,7 @@ function arrancar(puerto: number, intentos = 0): void {
     const direccion = `http://localhost:${puerto}`;
 
     console.log("");
-    console.log("  AppPack");
+    console.log("  Visual App");
     console.log(`  Abierto en   ${direccion}`);
     console.log(`  Datos en     ${almacen.archivo}`);
     console.log("");
@@ -216,14 +216,14 @@ function vigilarVentana(): void {
   setInterval(() => {
     if (Date.now() - ultimoLatido() < MARGEN) return;
 
-    console.log("  No quedan ventanas abiertas. Apagando AppPack.");
+    console.log("  No quedan ventanas abiertas. Apagando Visual App.");
     servidor.close();
     process.exit(0);
   }, 20_000).unref();
 }
 
 /** ¿Lo que contesta en ese puerto es otra copia de este mismo programa? */
-async function esAppPack(puerto: number): Promise<boolean> {
+async function esVisualApp(puerto: number): Promise<boolean> {
   try {
     const respuesta = await fetch(`http://localhost:${puerto}/api/sistema`, {
       signal: AbortSignal.timeout(1500),
@@ -237,7 +237,7 @@ async function esAppPack(puerto: number): Promise<boolean> {
 }
 
 /**
- * Abre AppPack en su propia ventana.
+ * Abre Visual App en su propia ventana.
  *
  * Edge y Chrome tienen un modo aplicación: `--app=` abre una ventana sin
  * pestañas, sin barra de direcciones y con su lugar propio en la barra de
@@ -314,13 +314,14 @@ function leerOpciones(args: string[]): Opciones {
     return i >= 0 && i + 1 < args.length ? args[i + 1] : undefined;
   };
 
-  const carpeta =
-    valor("--datos") ??
-    process.env.APPPACK_DATOS ??
-    path.join(
-      process.env.LOCALAPPDATA ?? path.join(os.homedir(), ".local", "share"),
-      "AppPack"
-    );
+  const elegida = valor("--datos") ?? process.env.VISUALAPP_DATOS;
+  const base = process.env.LOCALAPPDATA ?? path.join(os.homedir(), ".local", "share");
+  const carpeta = elegida ?? path.join(base, "Visual App");
+
+  // El programa se llamaba AppPack y sus datos vivían en una carpeta con ese
+  // nombre. Solo se mira cuando nadie eligió otra a mano: si alguien pasó
+  // --datos, ahí manda esa.
+  if (!elegida) mudarDatosDeAppPack(base, carpeta);
 
   const puerto = Number(valor("--puerto"));
 
@@ -330,6 +331,34 @@ function leerOpciones(args: string[]): Opciones {
     puerto: Number.isInteger(puerto) && puerto > 0 ? puerto : PUERTO_PREFERIDO,
     noAbrir: args.includes("--no-abrir"),
   };
+}
+
+/**
+ * Se lleva los datos de la carpeta vieja a la nueva.
+ *
+ * El programa cambió de nombre, y con él la carpeta donde guarda. Sin esto, la
+ * primera vez que se abre la versión nueva encuentra una carpeta que no existe,
+ * crea una base vacía y el negocio ve su catálogo, sus ventas y sus turnos
+ * desaparecidos — con los datos ahí al lado, intactos, pero invisibles.
+ *
+ * Se mueve la carpeta entera de una sola vez, que en el mismo disco es
+ * instantáneo y no deja dos copias que después no se sepa cuál es la buena. Y
+ * solo si la nueva todavía no existe: si ya hay datos nuevos, mandan esos.
+ */
+function mudarDatosDeAppPack(base: string, carpeta: string): void {
+  const vieja = path.join(base, "AppPack");
+
+  if (fs.existsSync(carpeta) || !fs.existsSync(vieja)) return;
+  if (!fs.existsSync(path.join(vieja, "datos.json"))) return;
+
+  try {
+    fs.renameSync(vieja, carpeta);
+    console.log(`  Se mudaron los datos de AppPack a ${carpeta}`);
+  } catch (error) {
+    // Que no se pueda mudar no puede impedir que el programa abra: se avisa y
+    // se arranca con la carpeta nueva, y los datos viejos quedan donde estaban.
+    console.error(`[datos] no se pudieron mudar desde ${vieja}: ${(error as Error).message}`);
+  }
 }
 
 /**

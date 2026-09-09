@@ -60,7 +60,7 @@ export function Marco({
             A
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-titulo text-medio font-semibold leading-5">AppPack</span>
+            <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual App</span>
             <span className="block truncate text-micro text-tinta-tenue">
               {sistema?.config.negocio ?? " "}
             </span>

@@ -4,7 +4,7 @@ import { Avisos } from "@/components/avisos";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AppPack",
+  title: "Visual App",
   description: "Stock, caja y ventas del negocio, en tu computadora.",
   // La ventana de la aplicación y la barra de tareas toman el ícono de acá: el
   // SVG no les alcanza, necesitan un PNG con tamaño declarado.

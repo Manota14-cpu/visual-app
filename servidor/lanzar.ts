@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
  * `try/catch` parecía cubierto y no lo estaba — probado, el proceso se muere
  * igual.
  *
- * Que no abra el explorador es un incordio. Que se apague AppPack con una
+ * Que no abra el explorador es un incordio. Que se apague Visual App con una
  * venta a medio cobrar, no.
  */
 export function lanzar(programa: string, args: string[]): void {

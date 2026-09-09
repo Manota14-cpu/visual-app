@@ -1,5 +1,5 @@
 ﻿# =====================================================================
-#  Abre AppPack
+#  Abre Visual App
 # =====================================================================
 #  Levanta el servidor y esconde la consola: la aplicación se ve como
 #  una ventana común, sin el cuadro negro atrás.
@@ -32,7 +32,7 @@ function Esconder {
 function Cartel($mensaje) {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(
-        $mensaje, "AppPack",
+        $mensaje, "Visual App",
         [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
 }
@@ -55,7 +55,7 @@ if ($enPath) {
 
 if (-not $node) {
     Esconder
-    Cartel "No se encontró Node.js en esta computadora, y AppPack lo necesita para funcionar.`n`nInstalalo con este comando y volvé a abrir AppPack:`n`n    winget install OpenJS.NodeJS.LTS"
+    Cartel "No se encontró Node.js en esta computadora, y Visual App lo necesita para funcionar.`n`nInstalalo con este comando y volvé a abrir Visual App:`n`n    winget install OpenJS.NodeJS.LTS"
     exit 1
 }
 
@@ -63,7 +63,7 @@ if (-not $node) {
 
 Esconder
 
-$registro = Join-Path $env:TEMP "apppack-arranque.txt"
+$registro = Join-Path $env:TEMP "visual-app-arranque.txt"
 
 # El servidor escribe en la consola escondida; se guarda en un archivo para
 # poder mostrar el motivo si algo sale mal.
@@ -76,6 +76,6 @@ $registro = Join-Path $env:TEMP "apppack-arranque.txt"
 if ($LASTEXITCODE -ne 0) {
     $detalle = ""
     if (Test-Path $registro) { $detalle = (Get-Content $registro -Tail 12) -join "`n" }
-    Cartel "AppPack se cerró con un error.`n`n$detalle"
+    Cartel "Visual App se cerró con un error.`n`n$detalle"
     exit $LASTEXITCODE
 }

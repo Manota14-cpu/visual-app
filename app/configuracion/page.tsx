@@ -112,7 +112,7 @@ export default function PaginaConfiguracion() {
                 </p>
                 <p className="mt-2 text-chico text-tinta-suave">
                   Es un archivo de texto común. Copiarlo a un pendrive es todo el respaldo que hace
-                  falta; ponerlo en otra computadora con AppPack instalado es toda la mudanza.
+                  falta; ponerlo en otra computadora con Visual App instalado es toda la mudanza.
                 </p>
               </div>
 
@@ -192,18 +192,18 @@ export default function PaginaConfiguracion() {
 
               <div className="flex flex-col gap-2 border-t border-linea pt-4">
                 <p className="text-base text-tinta-suave">
-                  Cerrar la ventana también apaga AppPack, pero tarda un minuto en darse cuenta.
+                  Cerrar la ventana también apaga Visual App, pero tarda un minuto en darse cuenta.
                   Con este botón se apaga en el momento.
                 </p>
                 <div>
                   <Boton icono="salir" onClick={() => void apagar()} disabled={apagando}>
-                    {apagando ? "Cerrando…" : "Cerrar AppPack"}
+                    {apagando ? "Cerrando…" : "Cerrar Visual App"}
                   </Boton>
                 </div>
               </div>
 
               <p className="border-t border-linea pt-3 text-chico text-tinta-suave">
-                AppPack {datos.programa} · formato de datos v{datos.version}
+                Visual App {datos.programa} · formato de datos v{datos.version}
               </p>
             </div>
           </Hoja>
@@ -310,7 +310,7 @@ function FormularioNegocio({
  * Las novedades del programa.
  *
  * Buscar no cambia nada y se puede hacer cuando se quiera. Aplicar cierra
- * AppPack y lo vuelve a abrir, así que nunca pasa solo: esto es una caja
+ * Visual App y lo vuelve a abrir, así que nunca pasa solo: esto es una caja
  * registradora, y una actualización que arranca sola a mitad de un turno es lo
  * peor que puede pasar por más buena que sea la versión nueva.
  */
@@ -366,7 +366,7 @@ function Actualizaciones() {
         <div className="flex flex-col gap-2">
           <p className="text-base">Bajando e instalando la versión {datos.ultima?.version}…</p>
           <p className="text-base text-tinta-suave">
-            AppPack se va a cerrar y volver a abrir solo. No cierres esta ventana a mano; tus datos
+            Visual App se va a cerrar y volver a abrir solo. No cierres esta ventana a mano; tus datos
             no se tocan.
           </p>
         </div>

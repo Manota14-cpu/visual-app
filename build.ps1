@@ -1,5 +1,5 @@
 # =====================================================================
-#  Arma el paquete de AppPack
+#  Arma el paquete de Visual App
 # =====================================================================
 #  Tres pasos: compilar la interfaz de Next a archivos estáticos,
 #  compilar el servidor de TypeScript a JavaScript, y dejar un .cmd que
@@ -16,8 +16,8 @@ param(
     # Lo que va a leer la gente en el aviso de "hay una versión nueva".
     [string]$Notas = "",
     # De dónde va a bajar el paquete el programa instalado. Con GitHub,
-    # `releases/latest/download/apppack.zip` apunta siempre a la última.
-    [string]$Descargas = "https://github.com/Manota14-cpu/apppack-escritorio/releases/latest/download/apppack.zip"
+    # `releases/latest/download/visual-app.zip` apunta siempre a la última.
+    [string]$Descargas = "https://github.com/Manota14-cpu/visual-app/releases/latest/download/visual-app.zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -82,13 +82,13 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 @echo off
 start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0abrir.ps1"
 exit
-'@ | Set-Content -Path "$salida\Abrir AppPack.cmd" -Encoding ascii
+'@ | Set-Content -Path "$salida\Abrir Visual App.cmd" -Encoding ascii
 
 # --- 5. El instalador -----------------------------------------------
 
 Paso "Preparando el instalador"
 
-node "$raiz\herramientas\icono.mjs" "$salida\AppPack.ico"
+node "$raiz\herramientas\icono.mjs" "$salida\Visual App.ico"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Copy-Item "$raiz\instalador\*.ps1" $salida -Force
@@ -113,7 +113,7 @@ if ($fuente -match 'export const VERSION\s*=\s*"([^"]+)"') {
 @echo off
 start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0instalar.ps1"
 exit
-'@ | Set-Content -Path "$salida\Instalar AppPack.cmd" -Encoding ascii
+'@ | Set-Content -Path "$salida\Instalar Visual App.cmd" -Encoding ascii
 
 # --- 6. Lo que se publica -------------------------------------------
 
@@ -128,7 +128,7 @@ $publicar = "$raiz\publicar"
 if (Test-Path $publicar) { Remove-Item $publicar -Recurse -Force }
 New-Item -ItemType Directory -Path $publicar | Out-Null
 
-$zip = "$publicar\apppack.zip"
+$zip = "$publicar\visual-app.zip"
 Compress-Archive -Path "$salida\*" -DestinationPath $zip -Force
 
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
@@ -160,18 +160,18 @@ Write-Host ""
 Write-Host "  Listo." -ForegroundColor Green
 Write-Host ""
 Write-Host "  $salida  ($peso MB)"
-Write-Host "     Instalar AppPack.cmd   instala en esta computadora"
-Write-Host "     Abrir AppPack.cmd      abre el programa sin instalarlo"
+Write-Host "     Instalar Visual App.cmd   instala en esta computadora"
+Write-Host "     Abrir Visual App.cmd      abre el programa sin instalarlo"
 Write-Host "     servidor\              la API y las reglas"
 Write-Host "     sitio\                 las pantallas"
 Write-Host ""
 Write-Host "  $publicar" -ForegroundColor Cyan
-Write-Host "     apppack.zip     el paquete que baja la actualización automática"
+Write-Host "     visual-app.zip     el paquete que baja la actualización automática"
 Write-Host "     version.json    el aviso que dice que hay una versión nueva"
 Write-Host ""
 Write-Host "  Para publicar la versión $version, subí esos dos archivos como"
 Write-Host "  adjuntos de una publicación nueva en GitHub. Las computadoras que"
-Write-Host "  ya tienen AppPack la van a ver dentro de las 24 horas."
+Write-Host "  ya tienen Visual App la van a ver dentro de las 24 horas."
 if ($Descargas -like "*USUARIO/REPO*") {
     Write-Host ""
     Write-Host "  OJO: la direccion de descarga sigue siendo la de ejemplo." -ForegroundColor Yellow
@@ -181,5 +181,5 @@ Write-Host ""
 Write-Host "  La carpeta se copia entera a otra computadora con Windows: ahí se"
 Write-Host "  ejecuta el instalador y queda con acceso directo y desinstalador."
 Write-Host "  Solo hace falta que esa computadora tenga Node.js."
-Write-Host "  Los datos quedan en %LOCALAPPDATA%\AppPack\datos.json"
+Write-Host "  Los datos quedan en %LOCALAPPDATA%\Visual App\datos.json"
 Write-Host ""

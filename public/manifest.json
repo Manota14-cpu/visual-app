@@ -1,6 +1,6 @@
 {
-  "name": "AppPack",
-  "short_name": "AppPack",
+  "name": "Visual App",
+  "short_name": "Visual App",
   "description": "Stock, caja y ventas del negocio.",
   "start_url": "/panel",
   "scope": "/",
