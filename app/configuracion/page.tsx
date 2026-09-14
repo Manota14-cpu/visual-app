@@ -202,9 +202,25 @@ export default function PaginaConfiguracion() {
                 </div>
               </div>
 
-              <p className="border-t border-linea pt-3 text-chico text-tinta-suave">
-                Visual App {datos.programa} · formato de datos v{datos.version}
-              </p>
+              <div className="border-t border-linea pt-3 text-chico text-tinta-suave">
+                <p>Visual App {datos.programa} · formato de datos v{datos.version}</p>
+                <p className="mt-1">
+                  © {new Date().getFullYear()} Visual Solution. Todos los derechos reservados.
+                </p>
+                <p className="mt-0.5">
+                  {/* Se abre afuera a propósito: la aplicación vive en una ventana sin
+                      barra de direcciones, y sin esto el sitio la reemplazaría y no
+                      habría cómo volver. */}
+                  <a
+                    href="https://visual-solution.vercel.app"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-acento hover:underline"
+                  >
+                    visual-solution.vercel.app
+                  </a>
+                </p>
+              </div>
             </div>
           </Hoja>
 

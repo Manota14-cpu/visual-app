@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import path from "node:path";
 import { inicial, nuevoId, Regla, type Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
@@ -7,13 +7,13 @@ import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../regl
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
 import { latir } from "../vida.ts";
 
-export const VERSION = "1.2.1";
+export const VERSION = "1.3.0";
 
 /**
- * El archivo de datos y lo que se puede hacer con Ã©l.
+ * El archivo de datos y lo que se puede hacer con él.
  *
- * Es lo que reemplaza a la pantalla de "estado de la base": acÃ¡ no hay conexiÃ³n
- * que probar ni migraciÃ³n que aplicar, hay un archivo que se puede abrir,
+ * Es lo que reemplaza a la pantalla de "estado de la base": acá no hay conexión
+ * que probar ni migración que aplicar, hay un archivo que se puede abrir,
  * copiar y llevarse en un pendrive.
  */
 export function rutasSistema(r: Ruteador, a: Almacen): void {
@@ -45,7 +45,7 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
       d.config.negocio = recortarObligatorio(
         cuerpo.negocio as string,
         80,
-        "PonÃ© un nombre para el negocio."
+        "Poné un nombre para el negocio."
       );
       d.config.detalle = recortar(cuerpo.detalle as string, 160);
       return d.config;
@@ -58,8 +58,8 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
   });
 
   r.post("/sistema/carpeta", () => {
-    // Abrir el explorador en la carpeta de datos es la forma mÃ¡s simple de que
-    // alguien copie su archivo a un pendrive sin explicarle dÃ³nde queda
+    // Abrir el explorador en la carpeta de datos es la forma más simple de que
+    // alguien copie su archivo a un pendrive sin explicarle dónde queda
     // "AppData".
     const carpeta = path.dirname(a.archivo);
 
@@ -72,9 +72,9 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
 
   r.post("/sistema/vaciar", ({ cuerpo }) => {
     // Vaciar la base borra todo lo cargado. Se pide escribir la palabra
-    // completa: un botÃ³n con "Â¿estÃ¡s seguro?" se acepta sin leerlo.
+    // completa: un botón con "¿estás seguro?" se acepta sin leerlo.
     if (String(cuerpo.confirmacion ?? "").trim().toUpperCase() !== "BORRAR") {
-      throw new Regla("EscribÃ­ BORRAR para confirmar.");
+      throw new Regla("Escribí BORRAR para confirmar.");
     }
 
     a.vaciar();
@@ -82,30 +82,30 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
   });
 
   // La ventana avisa cada veinte segundos que sigue abierta. Sin esto, el
-  // servidor no tendrÃ­a forma de saber que ya nadie lo estÃ¡ mirando.
+  // servidor no tendría forma de saber que ya nadie lo está mirando.
   r.post("/sistema/latido", () => {
     latir();
     return { ok: true };
   });
 
   r.post("/sistema/apagar", () => {
-    // Se contesta primero y se apaga despuÃ©s: si el proceso se fuera acÃ¡ mismo,
-    // el navegador verÃ­a la conexiÃ³n cortada y mostrarÃ­a un error justo cuando
-    // todo saliÃ³ bien.
+    // Se contesta primero y se apaga después: si el proceso se fuera acá mismo,
+    // el navegador vería la conexión cortada y mostraría un error justo cuando
+    // todo salió bien.
     setTimeout(() => process.exit(0), 250).unref();
     return { ok: true };
   });
 
   r.post("/sistema/ejemplo", () => {
     const vacia = a.leer((d) => d.productos.length === 0 && d.pedidos.length === 0);
-    if (!vacia) throw new Regla("Los datos de ejemplo solo se pueden cargar sobre una base vacÃ­a.");
+    if (!vacia) throw new Regla("Los datos de ejemplo solo se pueden cargar sobre una base vacía.");
 
     a.reemplazar(armarEjemplo());
     return { ok: true };
   });
 }
 
-/** Las copias que ya se hicieron, de la mÃ¡s nueva a la mÃ¡s vieja. */
+/** Las copias que ya se hicieron, de la más nueva a la más vieja. */
 function copias(a: Almacen) {
   if (!fs.existsSync(a.carpetaCopias)) return [];
 
@@ -121,11 +121,11 @@ function copias(a: Almacen) {
 }
 
 /**
- * Datos de ejemplo para poder mirar la aplicaciÃ³n funcionando antes de cargar
- * el catÃ¡logo de verdad.
+ * Datos de ejemplo para poder mirar la aplicación funcionando antes de cargar
+ * el catálogo de verdad.
  *
- * Se arman con las mismas reglas que usa el programa â€”el stock se mueve con
- * `ajustarStock`â€” asÃ­ que el historial y los informes cierran igual que con
+ * Se arman con las mismas reglas que usa el programa —el stock se mueve con
+ * `ajustarStock`— así que el historial y los informes cierran igual que con
  * datos reales.
  */
 function armarEjemplo(): BaseDatos {
@@ -148,12 +148,12 @@ function armarEjemplo(): BaseDatos {
   d.categorias.push(...categorias);
 
   const catalogo: [string, number, string, number, number, number, number, string][] = [
-    ["Bandeja plÃ¡stica NÂ°2 negra", 0, "x100u", 6200, 9900, 48, 12, "BAN-BAN-001"],
-    ["Bandeja plÃ¡stica NÂ°5 negra", 0, "x100u", 8400, 13500, 9, 10, "BAN-BAN-002"],
-    ["Bandeja de cartÃ³n kraft chica", 0, "x50u", 4100, 6900, 26, 8, "BAN-BAN-003"],
-    ["Vaso plÃ¡stico 180cc", 1, "x100u", 2300, 3900, 120, 24, "VAS-VAS-001"],
-    ["Vaso plÃ¡stico 300cc", 1, "x100u", 3100, 5200, 64, 20, "VAS-VAS-002"],
-    ["Vaso tÃ©rmico 240cc con tapa", 1, "x50u", 7600, 12400, 0, 6, "VAS-VAS-003"],
+    ["Bandeja plástica N°2 negra", 0, "x100u", 6200, 9900, 48, 12, "BAN-BAN-001"],
+    ["Bandeja plástica N°5 negra", 0, "x100u", 8400, 13500, 9, 10, "BAN-BAN-002"],
+    ["Bandeja de cartón kraft chica", 0, "x50u", 4100, 6900, 26, 8, "BAN-BAN-003"],
+    ["Vaso plástico 180cc", 1, "x100u", 2300, 3900, 120, 24, "VAS-VAS-001"],
+    ["Vaso plástico 300cc", 1, "x100u", 3100, 5200, 64, 20, "VAS-VAS-002"],
+    ["Vaso térmico 240cc con tapa", 1, "x50u", 7600, 12400, 0, 6, "VAS-VAS-003"],
     ["Bolsa camiseta 30x40", 2, "x100u", 1900, 3400, 210, 40, "BOL-BOL-001"],
     ["Bolsa camiseta 45x50", 2, "x100u", 2700, 4600, 84, 30, "BOL-BOL-002"],
     ["Bolsa de papel kraft con manija", 2, "x25u", 5400, 8900, 15, 10, "BOL-BOL-003"],
@@ -189,9 +189,9 @@ function armarEjemplo(): BaseDatos {
   }
 
   for (const [nombre, telefono, ciudad] of [
-    ["RotiserÃ­a La Esquina", "3492 30-1333", "Rafaela"],
+    ["Rotisería La Esquina", "3492 30-1333", "Rafaela"],
     ["Kiosco Belgrano", "3492 41-8820", "Rafaela"],
-    ["PanaderÃ­a San MartÃ­n", "3492 52-6104", "Sunchales"],
+    ["Panadería San Martín", "3492 52-6104", "Sunchales"],
     ["Bar Los Tilos", "3492 44-9075", "Rafaela"],
   ]) {
     d.clientes.push({
@@ -238,11 +238,11 @@ function armarEjemplo(): BaseDatos {
   };
 
   for (const [fecha, categoria, concepto, monto] of [
-    [dia(-3), "mercaderia", "Compra a PlÃ¡sticos del Litoral", 184000],
+    [dia(-3), "mercaderia", "Compra a Plásticos del Litoral", 184000],
     [dia(-3), "envios", "Flete de la compra", 22000],
     [dia(-8), "servicios", "Luz del local", 61500],
-    [dia(-12), "alquiler", "Alquiler del depÃ³sito", 320000],
-    [dia(-15), "insumos", "ArtÃ­culos de limpieza", 18400],
+    [dia(-12), "alquiler", "Alquiler del depósito", 320000],
+    [dia(-15), "insumos", "Artículos de limpieza", 18400],
     [dia(-20), "transporte", "Combustible reparto", 45000],
   ] as [string, string, string, number][]) {
     d.gastos.push({

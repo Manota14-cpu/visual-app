@@ -434,3 +434,18 @@ Se retiraron, además de la base:
   misma tabla.
 - **La contraseña de acceso**: quien abre el programa es quien está sentado en la
   computadora.
+
+## Licencia y autoría
+
+**Visual App** es un producto de **Visual Solution**.
+
+<https://visual-solution.vercel.app>
+
+Copyright © 2026 Visual Solution. Todos los derechos reservados.
+
+Que el código esté publicado no lo vuelve libre: se publica para que quien use
+el programa pueda ver qué hace con su información, y para poder distribuir las
+actualizaciones. Las condiciones están en [LICENSE](LICENSE).
+
+Los datos que carga cada negocio son de ese negocio: quedan en su computadora,
+Visual Solution no los recibe ni puede verlos.

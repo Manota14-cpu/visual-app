@@ -1,8 +1,11 @@
 {
   "name": "visual-app",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Panel de stock, caja y ventas. Interfaz en Next, servidor en Node, datos en un JSON local.",
+  "author": "Visual Solution (https://visual-solution.vercel.app)",
+  "homepage": "https://visual-solution.vercel.app",
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

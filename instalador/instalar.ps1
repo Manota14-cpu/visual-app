@@ -335,7 +335,10 @@ function AnotarEnWindows {
     New-Item -Path $clave -Force | Out-Null
     Set-ItemProperty $clave "DisplayName"     "Visual App"
     Set-ItemProperty $clave "DisplayVersion"  $version
-    Set-ItemProperty $clave "Publisher"       "Visual App"
+    # Quien publica el programa es la empresa, no el programa. Es lo que Windows
+    # muestra en la columna "Editor" de Aplicaciones instaladas.
+    Set-ItemProperty $clave "Publisher"       "Visual Solution"
+    Set-ItemProperty $clave "URLInfoAbout"    "https://visual-solution.vercel.app"
     Set-ItemProperty $clave "InstallLocation" $destino
     Set-ItemProperty $clave "DisplayIcon"     $icono
     Set-ItemProperty $clave "EstimatedSize"   $peso -Type DWord
@@ -466,6 +469,17 @@ $bajada.Location = New-Object System.Drawing.Point(111, 66)
 $bajada.Size = New-Object System.Drawing.Size(400, 22)
 $ventana.Controls.Add($bajada)
 
+# El crédito va en el pie, chico y gris: tiene que estar, no tiene que competir
+# con lo que la persona vino a hacer, que es instalar.
+$credito = New-Object System.Windows.Forms.Label
+$credito.Text = "© $((Get-Date).Year) Visual Solution`r`nvisual-solution.vercel.app"
+$credito.ForeColor = $Suave
+$credito.Font = Letra 8
+# En dos líneas y angosto: en una sola se metía abajo del botón Cancelar, que
+# empieza en el 300.
+$credito.Location = New-Object System.Drawing.Point(36, 24)
+$credito.Size = New-Object System.Drawing.Size(250, 34)
+
 $separador = New-Object System.Windows.Forms.Panel
 $separador.BackColor = $Linea
 $separador.Location = New-Object System.Drawing.Point(0, 110)
@@ -490,6 +504,7 @@ $bordePie.BackColor = $Linea
 $bordePie.Location = New-Object System.Drawing.Point(0, 0)
 $bordePie.Size = New-Object System.Drawing.Size(600, 1)
 $pie.Controls.Add($bordePie)
+$pie.Controls.Add($credito)
 
 function BotonPrincipal($texto) {
     $boton = New-Object System.Windows.Forms.Button

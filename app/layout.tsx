@@ -6,6 +6,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Visual App",
   description: "Stock, caja y ventas del negocio, en tu computadora.",
+  applicationName: "Visual App",
+  authors: [{ name: "Visual Solution", url: "https://visual-solution.vercel.app" }],
+  creator: "Visual Solution",
+  publisher: "Visual Solution",
   // La ventana de la aplicación y la barra de tareas toman el ícono de acá: el
   // SVG no les alcanza, necesitan un PNG con tamaño declarado.
   manifest: "/manifest.json",

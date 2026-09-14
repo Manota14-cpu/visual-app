@@ -179,6 +179,15 @@ $bordePie.Location = New-Object System.Drawing.Point(0, 0)
 $bordePie.Size = New-Object System.Drawing.Size(520, 1)
 $pie.Controls.Add($bordePie)
 
+$credito = New-Object System.Windows.Forms.Label
+$credito.Text = "© $((Get-Date).Year) Visual Solution"
+$credito.ForeColor = $Suave
+$credito.Font = Letra 8
+# Angosto a propósito: el botón Cancelar empieza en el 220.
+$credito.Location = New-Object System.Drawing.Point(32, 34)
+$credito.Size = New-Object System.Drawing.Size(180, 18)
+$pie.Controls.Add($credito)
+
 $aceptar = New-Object System.Windows.Forms.Button
 $aceptar.Text = "Desinstalar"
 $aceptar.Size = New-Object System.Drawing.Size(140, 38)
