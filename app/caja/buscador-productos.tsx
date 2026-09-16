@@ -16,6 +16,38 @@ import type { ProductoBuscado } from "@/lib/tipos";
  * de Enter —que es lo que manda un lector— agrega el producto directo, sin
  * pasar por la lista.
  */
+/**
+ * Qué hacer cuando alguien aprieta Enter en el buscador.
+ *
+ * Vive afuera del componente y se prueba sola porque es la decisión que más
+ * caro sale equivocar: de un lado carga el producto correcto, del otro le
+ * cobra al cliente una cosa por otra y le descuenta el stock al que no era.
+ *
+ * La trampa está en que los resultados que se ven en pantalla corresponden a
+ * `termino` —el texto de hace 220 ms—, no a lo que hay escrito ahora. Un lector
+ * de códigos escribe rapidísimo y termina con Enter: cuando eso pasa, la lista
+ * todavía es la de lo anterior. Si los dos textos no coinciden, la lista no
+ * sirve y hay que ir a buscar el código exacto.
+ */
+export function decidirEnter<T>(
+  escrito: string,
+  termino: string,
+  resultados: T[],
+  activo: number
+): { accion: "elegir"; producto: T } | { accion: "codigo"; codigo: string } | { accion: "nada" } {
+  const texto = escrito.trim();
+  const alDia = texto === termino.trim();
+  const elegido = alDia ? resultados[activo] : undefined;
+
+  if (elegido) return { accion: "elegir", producto: elegido };
+
+  // Cuatro y no seis: hay códigos internos cortos —los que alguien se inventa
+  // para la estantería— que con el umbral viejo nunca llegaban a consultarse.
+  if (texto.length >= 4) return { accion: "codigo", codigo: texto };
+
+  return { accion: "nada" };
+}
+
 export function BuscadorProductos({
   onElegir,
   autoFocus,
@@ -93,11 +125,9 @@ export function BuscadorProductos({
             setResaltado((i) => Math.max(i - 1, 0));
           } else if (e.key === "Enter") {
             e.preventDefault();
-            const elegido = resultados[activo];
-            if (elegido) elegir(elegido);
-            // Un lector de códigos escribe rapidísimo y termina con Enter: puede
-            // llegar antes de que la búsqueda por nombre haya contestado.
-            else if (texto.trim().length >= 6) void porCodigo(texto.trim());
+            const decision = decidirEnter(texto, termino, resultados, activo);
+            if (decision.accion === "elegir") elegir(decision.producto);
+            else if (decision.accion === "codigo") void porCodigo(decision.codigo);
           } else if (e.key === "Escape") {
             setTexto("");
           }

@@ -270,8 +270,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/cerrar", ({ cuerpo }) =>
-    a.escribir((d) => {
+  r.post("/caja/cerrar", ({ cuerpo }) => {
+    const cierre = a.escribir((d) => {
       const caja = d.cajas.find((c) => c.id === cuerpo.cajaId);
       if (!caja) throw new Regla("Esa caja no existe.");
       if (caja.estado !== "abierta") throw new Regla("Esta caja ya está cerrada.");
@@ -298,8 +298,22 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         contado,
         diferencia: contado - esperado,
       };
-    })
-  );
+    });
+
+    // El cierre de turno es el momento natural para resguardar: la jornada
+    // está cuadrada y es exactamente el estado al que alguien querría volver.
+    // Va DESPUÉS de escribir —nunca adentro— para que la copia contenga el
+    // cierre y no el instante anterior, y falla en silencio: quedarse sin
+    // poder cerrar la caja porque el disco está lleno sería peor que no tener
+    // la copia. La del día ya corrió al abrir el programa.
+    try {
+      a.copiar();
+    } catch (error) {
+      console.error(`[caja] no se pudo copiar al cerrar: ${(error as Error).message}`);
+    }
+
+    return cierre;
+  });
 }
 
 // ──────────────────────────────  Ayudas  ──────────────────────────────

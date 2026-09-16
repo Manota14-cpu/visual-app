@@ -7,7 +7,7 @@ import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../regl
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
 import { latir } from "../vida.ts";
 
-export const VERSION = "1.3.0";
+export const VERSION = "1.4.0";
 
 /**
  * El archivo de datos y lo que se puede hacer con él.
@@ -55,6 +55,29 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
   r.post("/sistema/copia", () => {
     const ruta = a.copiar();
     return { archivo: ruta, nombre: path.basename(ruta) };
+  });
+
+  /**
+   * Vuelve a una copia guardada.
+   *
+   * Se podía hacer una copia pero no restaurarla: el único camino de vuelta era
+   * cerrar el programa, abrir la carpeta y renombrar archivos a mano — justo en
+   * el momento en que la persona está asustada y no quiere tocar nada.
+   *
+   * Se pide escribir VOLVER por la misma razón que vaciar pide BORRAR: esto
+   * reemplaza todo lo cargado desde esa copia, y un botón con "¿estás seguro?"
+   * se acepta sin leerlo. El estado actual se guarda como copia antes de
+   * reemplazarlo, así que restaurar la copia equivocada tampoco es definitivo.
+   */
+  r.post("/sistema/restaurar", ({ cuerpo }) => {
+    if (String(cuerpo.confirmacion ?? "").trim().toUpperCase() !== "VOLVER") {
+      throw new Regla("Escribí VOLVER para confirmar.");
+    }
+
+    const nombre = String(cuerpo.nombre ?? "").trim();
+    if (!nombre) throw new Regla("Elegí una copia.");
+
+    return a.restaurar(nombre);
   });
 
   r.post("/sistema/carpeta", () => {

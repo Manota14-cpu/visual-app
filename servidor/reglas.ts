@@ -205,11 +205,20 @@ export function recortarObligatorio(
   return limpio;
 }
 
-/** Quita acentos y deja letras y números, para armar códigos. */
+/**
+ * Quita acentos y deja letras y números, para armar códigos.
+ *
+ * El rango de las marcas de acento va escrito como `̀-ͯ` y no con
+ * los caracteres puestos directamente. Son invisibles en el editor: si un
+ * guardado con la codificación equivocada los rompe —ya pasó una vez en este
+ * repositorio, con los acentos de `api/sistema.ts`—, el código sigue
+ * compilando y el buscador deja de ignorar acentos sin que nadie se entere.
+ * Escrito con el escape no hay nada que se pueda romper.
+ */
 export function soloAlfanumerico(s: string): string {
   return s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 }
@@ -241,7 +250,7 @@ export function normalizar(valor: string | null | undefined): string {
   if (!valor) return "";
   return valor
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
 

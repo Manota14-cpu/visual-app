@@ -20,6 +20,12 @@ export function nuevoId(): string {
 }
 
 /**
+ * Cuántas copias se conservan. Con una automática por día son casi tres
+ * semanas de historia, que es hasta donde alguien va a querer volver.
+ */
+const COPIAS_A_GUARDAR = 20;
+
+/**
  * El archivo JSON que hace de base de datos.
  *
  * Todo vive en memoria y se escribe entero en cada cambio. Con el volumen de un
@@ -37,8 +43,14 @@ export function nuevoId(): string {
  *
  * 2. **Ningún archivo roto.** Escribir sobre el archivo bueno significa que un
  *    corte de luz a mitad de camino deja un JSON truncado y se pierde todo. Se
- *    escribe en un temporal y recién ahí se reemplaza, que es una operación
- *    atómica del sistema de archivos.
+ *    escribe en un temporal, se fuerza el temporal a disco con `fsync` y recién
+ *    ahí se reemplaza, que es una operación atómica del sistema de archivos.
+ *    Sin el `fsync` el rename es igual de atómico pero puede publicar un
+ *    archivo cuyos bytes todavía no salieron de la caché del sistema.
+ *
+ * 3. **Nunca una sola copia.** El archivo vive en una computadora sola. Se
+ *    guarda una copia fechada al abrir el programa y otra al cerrar cada turno
+ *    de caja, y desde Configuración se puede volver a cualquiera de ellas.
  */
 export class Almacen {
   readonly archivo: string;
@@ -116,7 +128,21 @@ export class Almacen {
 
   private escribirArchivo(texto: string): void {
     const temporal = `${this.archivo}.tmp`;
-    fs.writeFileSync(temporal, texto, "utf8");
+
+    // Escribir y renombrar no alcanza por sí solo. El rename es atómico —el
+    // archivo bueno nunca se ve a medias—, pero eso es una garantía sobre el
+    // NOMBRE, no sobre el CONTENIDO: el sistema operativo puede tener los
+    // bytes todavía en su caché cuando se corta la luz, y entonces el archivo
+    // renombrado aparece vacío o cortado. `fsync` es lo que obliga a que los
+    // datos estén de verdad en el disco ANTES de que el nombre cambie.
+    const fd = fs.openSync(temporal, "w");
+    try {
+      fs.writeFileSync(fd, texto, "utf8");
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+
     fs.renameSync(temporal, this.archivo);
   }
 
@@ -125,28 +151,126 @@ export class Almacen {
    *
    * Es lo que reemplaza a la descarga de un respaldo: la copia queda en la
    * computadora, en una carpeta que se puede abrir, sin pasar por el navegador.
+   *
+   * Las copias van sin indentar. El archivo de trabajo se escribe prolijo
+   * porque está pensado para poder abrirlo y leerlo; una copia no se lee a
+   * mano —se restaura desde Configuración— y sin los espacios ocupa un cuarto
+   * menos, que multiplicado por una copia por día es la diferencia entre una
+   * carpeta que molesta y una que no.
    */
   copiar(): string {
+    const destino = this.nombreLibre(this.selloAhora());
+    fs.writeFileSync(destino, JSON.stringify(this.datos), "utf8");
+    this.podar();
+    return destino;
+  }
+
+  /**
+   * La copia del día, si todavía no se hizo. Devuelve su ruta, o null si ya
+   * había una de hoy.
+   *
+   * Nadie se acuerda de apretar el botón de copia. Y el día que hace falta
+   * —el disco que no arranca, la computadora que se moja— la última copia
+   * resulta ser de hace cuatro meses. Esto corre solo al abrir el programa:
+   * cuesta unos milisegundos y cambia "perdí todo" por "perdí lo de hoy".
+   */
+  copiaDelDia(): string | null {
+    const hoy = this.selloAhora().slice(0, 10); // aaaa-mm-dd
+    const yaHay = this.listarCopias().some((c) => c.startsWith(`datos-${hoy}`));
+    if (yaHay) return null;
+    return this.copiar();
+  }
+
+  /** Las copias que hay, de la más nueva a la más vieja. */
+  listarCopias(): string[] {
+    if (!fs.existsSync(this.carpetaCopias)) return [];
+    return fs
+      .readdirSync(this.carpetaCopias)
+      .filter((n) => n.startsWith("datos-") && n.endsWith(".json"))
+      .sort()
+      .reverse();
+  }
+
+  /**
+   * Vuelve a una copia guardada.
+   *
+   * Antes de reemplazar nada deja una copia del estado actual: restaurar por
+   * error la copia equivocada no puede ser un camino de ida. Y la copia se
+   * valida ANTES de tocar la base — si el archivo está roto, esto lanza y todo
+   * queda como estaba.
+   */
+  restaurar(nombre: string): { desde: string; respaldoPrevio: string } {
+    // El nombre viene de la pantalla: se acepta un archivo de la carpeta de
+    // copias y nada más. Sin esto, un "../../otra cosa" leería cualquier
+    // archivo de la computadora.
+    if (path.basename(nombre) !== nombre || !this.listarCopias().includes(nombre)) {
+      throw new Regla("Esa copia no existe.");
+    }
+
+    const origen = path.join(this.carpetaCopias, nombre);
+    const texto = fs.readFileSync(origen, "utf8");
+
+    let nueva: BaseDatos;
+    try {
+      nueva = JSON.parse(texto) as BaseDatos;
+    } catch {
+      throw new Regla("Esa copia está dañada y no se puede leer.");
+    }
+
+    if (!nueva || typeof nueva !== "object" || !Array.isArray(nueva.productos)) {
+      throw new Regla("Ese archivo no es una copia de Visual App.");
+    }
+
+    const respaldoPrevio = this.copiar();
+    this.datos = nueva;
+    this.guardar();
+
+    return { desde: nombre, respaldoPrevio: path.basename(respaldoPrevio) };
+  }
+
+  private selloAhora(): string {
     const ahora = new Date();
     const dos = (n: number) => String(n).padStart(2, "0");
-    const sello = [
+    return [
       ahora.getFullYear(),
       dos(ahora.getMonth() + 1),
       dos(ahora.getDate()),
       dos(ahora.getHours()) + dos(ahora.getMinutes()) + dos(ahora.getSeconds()),
     ].join("-");
+  }
 
-    // Ninguna copia pisa a otra. El nombre llegaba hasta el minuto, así que dos
-    // copias seguidas —hacer una a mano y vaciar la base, por ejemplo— dejaban
-    // una sola: la segunda borraba a la primera y la pantalla decía "guardada"
-    // las dos veces.
+  /**
+   * Ninguna copia pisa a otra. El nombre llegaba hasta el minuto, así que dos
+   * copias seguidas —hacer una a mano y vaciar la base, por ejemplo— dejaban
+   * una sola: la segunda borraba a la primera y la pantalla decía "guardada"
+   * las dos veces.
+   */
+  private nombreLibre(sello: string): string {
     let destino = path.join(this.carpetaCopias, `datos-${sello}.json`);
     for (let n = 2; fs.existsSync(destino) && n < 100; n++) {
       destino = path.join(this.carpetaCopias, `datos-${sello}-${n}.json`);
     }
-
-    fs.writeFileSync(destino, JSON.stringify(this.datos, null, 2), "utf8");
     return destino;
+  }
+
+  /**
+   * Deja las últimas COPIAS_A_GUARDAR y borra el resto.
+   *
+   * Cada copia es la base entera. Con una por día y nada que las borre, la
+   * carpeta crece para siempre hasta ser varias veces el tamaño de los datos
+   * que protege. Veinte cubren casi un mes de trabajo, que es todo lo que
+   * alguien va a querer mirar hacia atrás.
+   */
+  private podar(): void {
+    const sobran = this.listarCopias().slice(COPIAS_A_GUARDAR);
+    for (const nombre of sobran) {
+      try {
+        fs.unlinkSync(path.join(this.carpetaCopias, nombre));
+      } catch {
+        // Una copia que no se puede borrar —abierta en otro programa, por
+        // ejemplo— no es motivo para voltear la operación que la generó.
+      }
+    }
   }
 
   tamano(): number {

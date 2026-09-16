@@ -38,6 +38,8 @@ const opciones = leerOpciones(process.argv.slice(2));
 const almacen = new Almacen(opciones.archivo);
 const sitio = new Sitio(carpetaDelSitio());
 
+resguardarAlAbrir();
+
 const api = new Ruteador();
 rutasPanel(api, almacen);
 rutasCatalogo(api, almacen);
@@ -197,6 +199,29 @@ function arrancar(puerto: number, intentos = 0): void {
     vigilarVentana();
     vigilarActualizaciones();
   });
+}
+
+/**
+ * Guarda una copia de los datos la primera vez que se abre el programa cada día.
+ *
+ * Todo el negocio —catálogo, ventas, turnos, movimientos— vive en un archivo
+ * en una sola computadora. Había un botón para copiarlo, pero un botón que hay
+ * que acordarse de apretar no protege a nadie: el día que el disco no arranca,
+ * la última copia es de cuando alguien se acordó por última vez.
+ *
+ * Es al abrir y no al cerrar porque el programa puede terminar de mil maneras
+ * —cerrar la ventana, un corte de luz, un apagón de Windows— y de ninguna de
+ * ellas se vuelve para hacer una copia.
+ */
+function resguardarAlAbrir(): void {
+  try {
+    const copia = almacen.copiaDelDia();
+    if (copia) console.log(`  Copia del día  ${copia}`);
+  } catch (error) {
+    // Una copia que falla —disco lleno, carpeta sin permisos— no puede impedir
+    // que el negocio abra. Se avisa y el programa sigue.
+    console.error(`  No se pudo guardar la copia del día: ${(error as Error).message}`);
+  }
 }
 
 /**

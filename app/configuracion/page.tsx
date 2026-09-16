@@ -24,6 +24,10 @@ export default function PaginaConfiguracion() {
   const [vaciando, setVaciando] = useState(false);
   const [confirmacion, setConfirmacion] = useState("");
   const [apagando, setApagando] = useState(false);
+  // La copia que se está por restaurar, y la palabra que lo confirma.
+  const [volviendoA, setVolviendoA] = useState<string | null>(null);
+  const [confirmaVolver, setConfirmaVolver] = useState("");
+  const [restaurando, setRestaurando] = useState(false);
 
   /**
    * Apaga el programa y cierra la ventana.
@@ -53,6 +57,33 @@ export default function PaginaConfiguracion() {
       avisos.error(e instanceof ErrorApi ? e.message : "No se pudo copiar.");
     } finally {
       setCopiando(false);
+    }
+  }
+
+  /**
+   * Vuelve a una copia guardada.
+   *
+   * Reemplaza todo lo cargado desde esa fecha, así que se pide escribir la
+   * palabra completa igual que para vaciar. El servidor guarda el estado
+   * actual como copia antes de pisarlo: si alguien elige la copia equivocada,
+   * todavía hay camino de vuelta.
+   */
+  async function restaurar() {
+    if (!volviendoA) return;
+    setRestaurando(true);
+    try {
+      const r = await api.post<{ respaldoPrevio: string }>("/sistema/restaurar", {
+        nombre: volviendoA,
+        confirmacion: confirmaVolver,
+      });
+      avisos.exito(`Se volvió a ${volviendoA}. Lo anterior quedó guardado en ${r.respaldoPrevio}.`);
+      setVolviendoA(null);
+      setConfirmaVolver("");
+      await recargar();
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo restaurar.");
+    } finally {
+      setRestaurando(false);
     }
   }
 
@@ -141,25 +172,39 @@ export default function PaginaConfiguracion() {
           <Hoja titulo="Copias guardadas" cuerpo="p-0">
             {datos.copias.length === 0 ? (
               <p className="px-4 py-6 text-center text-base text-tinta-suave">
-                Todavía no hiciste ninguna copia.
+                Todavía no hay ninguna copia.
               </p>
             ) : (
-              <ul>
-                {datos.copias.map((copia) => (
-                  <li
-                    key={copia.nombre}
-                    className="flex items-center justify-between gap-3 border-b border-linea px-4 py-2.5 last:border-0"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-mono text-chico">{copia.nombre}</span>
-                      <span className="block text-chico text-tinta-suave">
-                        {fechaHora(copia.fecha)}
+              <>
+                <p className="border-b border-linea px-4 py-2.5 text-chico text-tinta-suave">
+                  Se guarda una copia sola al abrir el programa cada día y otra al cerrar cada
+                  turno de caja. Se conservan las últimas veinte.
+                </p>
+                <ul>
+                  {datos.copias.map((copia) => (
+                    <li
+                      key={copia.nombre}
+                      className="flex items-center justify-between gap-3 border-b border-linea px-4 py-2.5 last:border-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-mono text-chico">{copia.nombre}</span>
+                        <span className="block text-chico text-tinta-suave">
+                          {fechaHora(copia.fecha)} · {peso(copia.tamano)}
+                        </span>
                       </span>
-                    </span>
-                    <span className="cifra shrink-0 text-tinta-suave">{peso(copia.tamano)}</span>
-                  </li>
-                ))}
-              </ul>
+                      <Boton
+                        icono="recargar"
+                        onClick={() => {
+                          setVolviendoA(copia.nombre);
+                          setConfirmaVolver("");
+                        }}
+                      >
+                        Volver a esta
+                      </Boton>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </Hoja>
 
@@ -257,6 +302,43 @@ export default function PaginaConfiguracion() {
             value={confirmacion}
             onChange={(e) => setConfirmacion(e.target.value)}
             placeholder="BORRAR"
+          />
+        </div>
+      </Dialogo>
+
+      <Dialogo
+        abierto={volviendoA !== null}
+        onCerrar={() => setVolviendoA(null)}
+        titulo="Volver a una copia"
+        descripcion="Reemplaza todo lo cargado desde esa fecha."
+        ancho="max-w-md"
+        pie={
+          <>
+            <Boton onClick={() => setVolviendoA(null)}>Cancelar</Boton>
+            <Boton
+              tono="peligro"
+              onClick={() => void restaurar()}
+              disabled={restaurando || confirmaVolver.trim().toUpperCase() !== "VOLVER"}
+            >
+              {restaurando ? "Volviendo…" : "Volver a esta copia"}
+            </Boton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="break-all rounded border border-linea bg-lienzo px-3 py-2 font-mono text-chico">
+            {volviendoA}
+          </p>
+          <p className="text-base text-tinta-media">
+            El catálogo, las ventas, los clientes y los turnos quedan como estaban en esa copia.
+            Todo lo que se cargó después desaparece de la aplicación — pero antes de reemplazar
+            nada se guarda una copia del estado actual, así que también se puede volver de acá.
+          </p>
+          <Campo
+            etiqueta="Escribí VOLVER para confirmar"
+            value={confirmaVolver}
+            onChange={(e) => setConfirmaVolver(e.target.value)}
+            placeholder="VOLVER"
           />
         </div>
       </Dialogo>
