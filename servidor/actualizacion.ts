@@ -257,6 +257,14 @@ export async function aplicar(): Promise<{ version: string }> {
   // proceso de verdad independiente, que es lo mismo que hace el lanzador de la
   // aplicación. El primer argumento vacío es el título de la ventana: sin él,
   // `start` toma la ruta entre comillas como título y no abre nada.
+  //
+  // Y `cwd` es obligatorio, no un detalle: sin él el actualizador hereda la
+  // carpeta de trabajo de este proceso, que es la carpeta INSTALADA. Windows no
+  // deja renombrar una carpeta que es el directorio actual de algún proceso, así
+  // que el instalador moría con «no se puede cambiar el nombre ... porque está
+  // en uso» y la actualización no se aplicaba nunca. El actualizador tiene que
+  // pararse en la carpeta del paquete, que es la única que la instalación no
+  // toca — es lo que su propio comentario decía y nadie estaba cumpliendo.
   spawn(
     "cmd.exe",
     [
@@ -273,7 +281,7 @@ export async function aplicar(): Promise<{ version: string }> {
       "-Paquete",
       destino,
     ],
-    { detached: true, stdio: "ignore" }
+    { cwd: destino, detached: true, stdio: "ignore" }
   ).unref();
 
   return { version: aviso.version };

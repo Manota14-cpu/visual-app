@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { leerNumero, margen, nuevoPrecio, plata, hoy, dia } from "@/lib/formato";
+import {
+  leerNumero,
+  margenSobreCosto,
+  margenSobreVenta,
+  nuevoPrecio,
+  plata,
+  hoy,
+  dia,
+} from "@/lib/formato";
 
 /**
  * Lo que se prueba acá es lo que, si se rompe, se rompe en plata: cómo se lee
@@ -55,13 +63,40 @@ describe("nuevoPrecio", () => {
 
 describe("margen", () => {
   it("es null cuando falta el costo, en vez de dar 100%", () => {
-    expect(margen(1000, null)).toBeNull();
-    expect(margen(1000, 0)).toBeNull();
-    expect(margen(0, 500)).toBeNull();
+    expect(margenSobreVenta(1000, null)).toBeNull();
+    expect(margenSobreVenta(1000, 0)).toBeNull();
+    expect(margenSobreVenta(0, 500)).toBeNull();
+
+    expect(margenSobreCosto(1000, null)).toBeNull();
+    expect(margenSobreCosto(1000, 0)).toBeNull();
+    expect(margenSobreCosto(0, 500)).toBeNull();
   });
 
-  it("calcula sobre el precio de venta", () => {
-    expect(margen(1000, 600)).toBe(40);
+  it("son dos numeros distintos de la misma operacion", () => {
+    // Cuesta 100, se vende a 150: le pongo 50% encima, y de cada peso que
+    // entra me quedan 33 centavos. Confundirlos es creer que se gana la
+    // mitad cuando se gana un tercio.
+    expect(margenSobreCosto(150, 100)).toBe(50);
+    expect(margenSobreVenta(150, 100)).toBe(33);
+  });
+
+  it("sobre la venta nunca llega a 100 y sobre el costo no tiene techo", () => {
+    expect(margenSobreVenta(1000, 600)).toBe(40);
+    expect(margenSobreCosto(1000, 600)).toBe(67);
+
+    // Un producto que se vende a cinco veces lo que costo.
+    expect(margenSobreVenta(500, 100)).toBe(80);
+    expect(margenSobreCosto(500, 100)).toBe(400);
+  });
+
+  it("dan cero los dos cuando se vende al costo", () => {
+    expect(margenSobreVenta(800, 800)).toBe(0);
+    expect(margenSobreCosto(800, 800)).toBe(0);
+  });
+
+  it("dan negativo cuando se vende a perdida, en vez de esconderlo", () => {
+    expect(margenSobreVenta(80, 100)).toBe(-25);
+    expect(margenSobreCosto(80, 100)).toBe(-20);
   });
 });
 

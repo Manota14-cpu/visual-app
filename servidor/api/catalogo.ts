@@ -4,7 +4,8 @@ import {
   ajustarStock,
   contiene,
   entero,
-  margen,
+  margenSobreCosto,
+  margenSobreVenta,
   monto,
   normalizar,
   nuevoPrecio,
@@ -548,7 +549,8 @@ export function vista(d: BaseDatos, p: Producto) {
     stock: p.stock,
     stockMinimo: p.stockMinimo,
     activo: p.activo,
-    margen: margen(p.precioVenta, p.precioCosto),
+    margen: margenSobreVenta(p.precioVenta, p.precioCosto),
+    margenCosto: margenSobreCosto(p.precioVenta, p.precioCosto),
     creadoEn: p.creadoEn,
     actualizadoEn: p.actualizadoEn,
   };
@@ -626,6 +628,7 @@ interface FilaPrecio {
   costoActual: number | null;
   costoNuevo: number | null;
   margenNuevo: number | null;
+  margenCostoNuevo: number | null;
 }
 
 function previsualizar(d: BaseDatos, cuerpo: Record<string, unknown>): FilaPrecio[] {
@@ -662,7 +665,8 @@ function previsualizar(d: BaseDatos, cuerpo: Record<string, unknown>): FilaPreci
       precioNuevo,
       costoActual: p.precioCosto,
       costoNuevo,
-      margenNuevo: margen(precioNuevo, costoNuevo ?? p.precioCosto),
+      margenNuevo: margenSobreVenta(precioNuevo, costoNuevo ?? p.precioCosto),
+      margenCostoNuevo: margenSobreCosto(precioNuevo, costoNuevo ?? p.precioCosto),
     });
   }
 

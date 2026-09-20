@@ -22,32 +22,36 @@ const secciones: { nombre: string; href: string; icono: NombreIcono }[] = [
 /**
  * El monograma, dibujado con las mismas proporciones que el ícono del programa.
  *
- * Va suelto sobre el fondo, sin la baldosa que sí lleva el ícono: ahí la
- * baldosa existe para que la marca no se pierda sobre una barra de tareas
- * oscura, y acá el fondo es el de la aplicación y siempre es claro.
+ * Lleva la baldosa azul igual que el ícono, y no el trazo suelto de antes. Que
+ * la marca sea la misma en la barra de tareas, en el escritorio y arriba de la
+ * columna es la mitad de lo que hace que un programa se vea terminado; y de
+ * paso es el único lugar del marco donde aparece el color de la marca, que
+ * hasta acá vivía nada más que en los botones.
  *
- * Los trazos se recortan contra una franja horizontal para que los remates
- * queden planos, que es como es la marca.
+ * Tres trazos, no cuatro: la pata derecha de la V y la izquierda de la A son el
+ * mismo trazo, así el encuentro entre las dos letras es un ángulo limpio. Y se
+ * recortan contra una franja horizontal para que los remates queden planos, que
+ * es como es la marca.
  */
 function Marca() {
   return (
     <svg
       viewBox="0 0 64 64"
-      className="h-9 w-9 shrink-0 text-tinta"
+      className="h-9 w-9 shrink-0"
       aria-hidden="true"
       focusable="false"
     >
       <clipPath id="marca-franja">
-        <rect x="0" y="18.56" width="64" height="28.16" />
+        <rect x="0" y="18" width="64" height="28" />
       </clipPath>
-      <g clipPath="url(#marca-franja)" stroke="currentColor" fill="none" strokeLinecap="butt">
-        <g strokeWidth="8.06">
-          <path d="M13.18 18.56 L23.55 46.72" />
-          <path d="M33.92 18.56 L23.55 46.72" />
-          <path d="M43.39 18.56 L34.43 46.72" />
-          <path d="M43.39 18.56 L50.75 46.72" />
+      <rect width="64" height="64" rx="14" className="fill-acento" />
+      <g clipPath="url(#marca-franja)" stroke="#FFFFFF" fill="none" strokeLinecap="butt">
+        <g strokeWidth="7.4">
+          <path d="M17 18 L27 46" />
+          <path d="M27 46 L37 18" />
+          <path d="M37 18 L47 46" />
         </g>
-        <path d="M36.29 41.28 L49.28 41.28" strokeWidth="7.09" />
+        <path d="M30.5 38.2 L43.5 38.2" strokeWidth="6.4" />
       </g>
     </svg>
   );

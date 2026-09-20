@@ -27,6 +27,15 @@ export interface BaseDatos {
   gastos: Gasto[];
   cajas: Caja[];
   /**
+   * Los pagos que los clientes traen despues, contra lo que deben.
+   *
+   * La deuda en si no se guarda: se deduce de las ventas —lo que no se pago en
+   * el momento— menos estos cobros. Un saldo guardado aparte es un numero mas
+   * que puede quedar desincronizado de los hechos que lo explican, y con plata
+   * ajena eso no se puede permitir.
+   */
+  cobrosFiado: CobroFiado[];
+  /**
    * Los correlativos visibles: número de venta y número de turno. Se guardan en
    * vez de calcularse con un máximo, porque borrar el último pedido no tiene
    * que hacer que el siguiente repita un número ya impreso.
@@ -131,8 +140,40 @@ export interface ItemPedido {
   nombre: string;
   unidadMedida: string;
   precio: number;
+  /**
+   * El costo unitario del día de la venta, copiado igual que el nombre.
+   *
+   * Sin esto, el informe reconstruía el costo con el precio de HOY: cada
+   * actualización de costos movía el margen de todos los meses cerrados, y con
+   * inflación eso pasa seguido. Un mes que cerró en 41% podía mostrar 25% al
+   * mes siguiente sin que cambiara una sola venta.
+   *
+   * Nulo en los renglones anteriores a que esto existiera, y en los productos
+   * que no tenían costo cargado: ahí el informe vuelve a estimar con el costo
+   * actual, y lo dice.
+   */
+  costo: number | null;
   /** Negativa en una devolución. */
   cantidad: number;
+}
+
+/**
+ * Un pago que un cliente trae contra lo que debe.
+ *
+ * Va atado al turno de caja si entro en efectivo, porque en ese caso la plata
+ * esta fisicamente en el cajon y el arqueo tiene que contarla.
+ */
+export interface CobroFiado {
+  id: string;
+  clienteId: string;
+  /** Como se llamaba el cliente ese dia. */
+  nombre: string;
+  monto: number;
+  metodo: string;
+  /** Nulo si se cobro sin un turno abierto. */
+  cajaId: string | null;
+  nota: string | null;
+  creadoEn: Fecha;
 }
 
 /** Un tramo del cobro. Una venta puede pagarse con varios medios. */

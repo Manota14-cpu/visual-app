@@ -1,6 +1,14 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
-import { contiene, normalizar, recortar, recortarObligatorio, soloDigitos } from "../reglas.ts";
+import {
+  adeudadoDe,
+  contiene,
+  deudaDe,
+  normalizar,
+  recortar,
+  recortarObligatorio,
+  soloDigitos,
+} from "../reglas.ts";
 import type { BaseDatos, Cliente } from "../tipos.ts";
 import { paginar } from "./catalogo.ts";
 
@@ -80,10 +88,52 @@ export function rutasClientes(r: Ruteador, a: Almacen): void {
           canal: p.canal,
           estado: p.estado,
           total: p.total,
+          pagado: p.pagos.reduce((s, x) => s + x.monto, 0),
+          adeudado: adeudadoDe(p),
           creadoEn: p.creadoEn,
           renglones: p.items.length,
         }))
     )
+  );
+
+  /**
+   * La cuenta del cliente: lo que quedo debiendo de cada venta y lo que fue
+   * trayendo, en una sola linea de tiempo.
+   *
+   * Es la pantalla que reemplaza al cuaderno: para que alguien confie en un
+   * saldo tiene que poder ver de donde sale, renglon por renglon.
+   */
+  r.get("/clientes/:id/cuenta", ({ params }) =>
+    a.leer((d) => {
+      const cliente = d.clientes.find((c) => c.id === params.id);
+      if (!cliente) return noEncontrado("Ese cliente no existe.");
+
+      const fiadas = d.pedidos
+        .filter((p) => p.clienteId === cliente.id && adeudadoDe(p) > 0)
+        .map((p) => ({
+          tipo: "venta" as const,
+          id: p.id,
+          detalle: `Venta #${p.numero}`,
+          monto: adeudadoDe(p),
+          creadoEn: p.creadoEn,
+        }));
+
+      const pagos = d.cobrosFiado
+        .filter((c) => c.clienteId === cliente.id)
+        .map((c) => ({
+          tipo: "pago" as const,
+          id: c.id,
+          detalle: c.nota ? `Pago en ${c.metodo} · ${c.nota}` : `Pago en ${c.metodo}`,
+          monto: -c.monto,
+          creadoEn: c.creadoEn,
+        }));
+
+      return {
+        cliente: { id: cliente.id, nombre: cliente.nombre, telefono: cliente.telefono },
+        debe: deudaDe(d, cliente.id),
+        renglones: [...fiadas, ...pagos].sort((x, y) => y.creadoEn.localeCompare(x.creadoEn)),
+      };
+    })
   );
 
   r.post("/clientes", ({ cuerpo }) =>
@@ -185,6 +235,8 @@ export function vista(d: BaseDatos, c: Cliente) {
     compras: compras.length,
     // Las devoluciones vienen con total negativo, así que restan solas.
     gastado: compras.reduce((s, p) => s + p.total, 0),
+    /** Lo que debe hoy. Cero es que está al día. */
+    debe: deudaDe(d, c.id),
     ultimaCompra:
       compras.length === 0
         ? null

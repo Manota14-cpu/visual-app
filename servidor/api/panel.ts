@@ -1,6 +1,6 @@
 import type { Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
-import { cajaAbierta, esperadoEn, ventasDe } from "../reglas.ts";
+import { cajaAbierta, deudaTotal, esperadoEn, ventasDe } from "../reglas.ts";
 
 /**
  * Los números de la pantalla principal.
@@ -44,6 +44,11 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
           pedidos: d.pedidos.filter((p) => p.estado === "pendiente" || p.estado === "preparando")
             .length,
         },
+
+        // Plata del negocio que esta en la calle. Sin esto, el Panel muestra
+        // un stock y una caja que cierran, y no dice que ademas hay gente que
+        // debe.
+        fiado: deudaTotal(d),
 
         hoyVentas: {
           cantidad: ventasDeHoy.length,

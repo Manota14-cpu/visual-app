@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
+import { Area, Aviso, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
 import { leerNumero, plata } from "@/lib/formato";
@@ -17,10 +17,13 @@ import type { Arqueo, Caja } from "@/lib/tipos";
  */
 export function DialogoCierre({
   caja,
+  renglonesSinCobrar = 0,
   onCerrar,
   onCerrado,
 }: {
   caja: Caja | null;
+  /** Cuántos renglones hay cargados y sin cobrar en el mostrador. */
+  renglonesSinCobrar?: number;
   onCerrar: () => void;
   onCerrado: () => void;
 }) {
@@ -66,6 +69,9 @@ export function DialogoCierre({
         <div className="flex flex-col gap-3">
           <Renglon rotulo="Fondo inicial" valor={arqueo.fondo} />
           <Renglon rotulo="Cobrado en efectivo" valor={arqueo.efectivo} />
+          {arqueo.cobradoDeFiado > 0 && (
+            <Renglon rotulo="Cobrado de fiado" valor={arqueo.cobradoDeFiado} />
+          )}
           <Renglon rotulo="Ingresos al cajón" valor={arqueo.ingresos} />
           <Renglon rotulo="Retiros" valor={-arqueo.retiros} />
           <div className="border-t border-linea pt-3">
@@ -102,9 +108,23 @@ export function DialogoCierre({
       }
     >
       <div className="flex flex-col gap-4">
+        {/* La venta a medio cargar vive solo en esta pantalla: si el turno se
+            cierra, se pierde y no queda rastro de que existió. Vale más un
+            cartel acá que un cliente esperando mientras se vuelve a cargar
+            todo. */}
+        {renglonesSinCobrar > 0 && (
+          <Aviso tono="alerta">
+            Hay {renglonesSinCobrar} {renglonesSinCobrar === 1 ? "renglón" : "renglones"} cargados
+            sin cobrar. Si cerrás el turno ahora, esa venta se pierde.
+          </Aviso>
+        )}
+
         <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo px-3 py-2.5">
           <Renglon rotulo="Fondo inicial" valor={caja.fondo} />
           <Renglon rotulo="Cobrado en efectivo" valor={caja.totales.efectivo} />
+          {caja.cobradoDeFiado > 0 && (
+            <Renglon rotulo="Cobrado de fiado" valor={caja.cobradoDeFiado} />
+          )}
           <Renglon rotulo="Ingresos" valor={caja.ingresado} />
           <Renglon rotulo="Retiros" valor={-caja.retirado} />
           <div className="border-t border-linea pt-2">

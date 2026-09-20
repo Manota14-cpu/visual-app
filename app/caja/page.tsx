@@ -40,7 +40,14 @@ export default function PaginaCaja() {
   // desmontaba antes de que alguien alcanzara a leerlo.
   const [cerrando, setCerrando] = useState<Caja | null>(null);
   const [moviendo, setMoviendo] = useState(false);
-  const [ultima, setUltima] = useState<{ id: string; numero: number; total: number; vuelto: number } | null>(null);
+  const [ultima, setUltima] = useState<{
+    id: string;
+    numero: number;
+    total: number;
+    vuelto: number;
+    fiado: number;
+    deudaCliente: number;
+  } | null>(null);
 
   const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
 
@@ -130,8 +137,13 @@ export default function PaginaCaja() {
                 <span className="flex items-center gap-2">
                   <Icono nombre="listo" tamano={17} />
                   <span>
-                    Venta #{ultima.numero} cobrada por {plata(ultima.total)}
-                    {ultima.vuelto > 0 ? ` · vuelto ${plata(ultima.vuelto)}` : ""}
+                    {ultima.fiado > 0
+                      ? `Venta #${ultima.numero} por ${plata(ultima.total)} · quedan ${plata(ultima.fiado)} fiados` +
+                        (ultima.deudaCliente > ultima.fiado
+                          ? ` · debe ${plata(ultima.deudaCliente)} en total`
+                          : "")
+                      : `Venta #${ultima.numero} cobrada por ${plata(ultima.total)}` +
+                        (ultima.vuelto > 0 ? ` · vuelto ${plata(ultima.vuelto)}` : "")}
                   </span>
                 </span>
                 <span className="flex items-center gap-2">
@@ -409,6 +421,7 @@ export default function PaginaCaja() {
       {cerrando && (
         <DialogoCierre
           caja={cerrando}
+          renglonesSinCobrar={items.length}
           onCerrar={() => setCerrando(null)}
           onCerrado={() => {
             // Lo que quedó sin cobrar no pertenece al turno siguiente.

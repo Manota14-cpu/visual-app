@@ -1,6 +1,14 @@
 import type { Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
-import { cuentaEnResultado, entero, etiquetaGasto } from "../reglas.ts";
+import {
+  adeudadoDe,
+  cuentaEnResultado,
+  deudaTotal,
+  entero,
+  etiquetaGasto,
+  margenSobreCosto,
+  margenSobreVenta,
+} from "../reglas.ts";
 import { diaLocal } from "./panel.ts";
 
 /**
@@ -17,9 +25,14 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
       const pedido = entero(consulta.get("dias"), 30);
       const periodo = [7, 30, 90, 0].includes(pedido) ? pedido : 30;
 
-      const desde =
-        periodo === 0 ? "" : new Date(Date.now() - periodo * 86_400_000).toISOString();
-
+      // Un solo corte para todo el informe: el dia del calendario local.
+      //
+      // Antes las ventas se filtraban por un instante exacto —N x 24 h atras,
+      // en UTC— y los gastos por el dia local. Eran dos ventanas distintas para
+      // el mismo periodo: el informe incluia gastos de un dia cuyas ventas no
+      // incluia, y como el Resultado es vendido menos costo menos gastos, el
+      // sesgo iba siempre para el mismo lado. Ademas el corte de ventas corria
+      // con el reloj, asi que el informe de "30 dias" cambiaba hora a hora.
       const desdeFecha = (() => {
         if (periodo === 0) return "";
         const fecha = new Date();
@@ -27,36 +40,61 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
         return diaLocal(fecha);
       })();
 
-      const ventas = d.pedidos.filter((p) => p.estado !== "cancelado" && p.creadoEn >= desde);
+      const enPeriodo = (iso: string) => desdeFecha === "" || diaLocal(new Date(iso)) >= desdeFecha;
+
+      const ventas = d.pedidos.filter((p) => p.estado !== "cancelado" && enPeriodo(p.creadoEn));
       const renglones = ventas.flatMap((p) => p.items);
 
-      const costoDe = (productoId: string | null) =>
-        d.productos.find((p) => p.id === productoId)?.precioCosto ?? 0;
+      // El costo sale del renglon, que lo guardo el dia de la venta. Para los
+      // renglones viejos —los de antes de que eso existiera— se vuelve a
+      // estimar con el costo actual, que es lo unico que se puede saber.
+      const costoDe = (item: { productoId: string | null; costo?: number | null }) =>
+        item.costo ?? d.productos.find((p) => p.id === item.productoId)?.precioCosto ?? 0;
 
       const ingreso = renglones.reduce((s, i) => s + i.precio * i.cantidad, 0);
-      // El costo se estima con el costo ACTUAL del producto, no con el que
-      // tenía el día de la venta: es lo que se puede saber sin guardar el costo
-      // en cada renglón, y se dice para que nadie lo lea como exacto.
-      const costo = renglones.reduce((s, i) => s + costoDe(i.productoId) * i.cantidad, 0);
+      const costo = renglones.reduce((s, i) => s + costoDe(i) * i.cantidad, 0);
 
-      const porProducto = new Map<string, { nombre: string; unidades: number; ingreso: number }>();
+      // 1 - Cuantas unidades se vendieron sin ningun costo con que compararlas.
+      //
+      // Un producto sin costo cargado entra al informe como ganancia pura: el
+      // margen sube y el Resultado miente, sin que nada avise. El aviso de
+      // "costo dudoso" que ya existia no lo agarraba, porque filtra los que
+      // tienen costo mayor a cero — justamente al reves del caso mas comun,
+      // que es no haberlo cargado nunca.
+      const unidadesSinCosto = renglones
+        .filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
+        .reduce((s, i) => s + i.cantidad, 0);
+
+      const ingresoSinCosto = renglones
+        .filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
+        .reduce((s, i) => s + i.precio * i.cantidad, 0);
+
+      // El costo se acumula renglon por renglon, con el que cada uno guardo el
+      // dia de su venta. Multiplicar el costo de hoy por el total de unidades
+      // seria promediar meses distintos a un solo precio.
+      const porProducto = new Map<
+        string,
+        { nombre: string; unidades: number; ingreso: number; costo: number }
+      >();
       for (const item of renglones) {
         const clave = item.productoId ?? item.nombre;
         const actual = porProducto.get(clave) ?? {
           nombre: d.productos.find((p) => p.id === item.productoId)?.nombre ?? item.nombre,
           unidades: 0,
           ingreso: 0,
+          costo: 0,
         };
 
         actual.unidades += item.cantidad;
         actual.ingreso += item.precio * item.cantidad;
+        actual.costo += costoDe(item) * item.cantidad;
         porProducto.set(clave, actual);
       }
 
       const productos = [...porProducto.entries()]
         .map(([clave, v]) => {
           const producto = d.productos.find((p) => p.id === clave);
-          const costoProducto = (producto?.precioCosto ?? 0) * v.unidades;
+          const costoProducto = v.costo;
 
           return {
             productoId: producto?.id ?? null,
@@ -64,10 +102,11 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
             unidades: v.unidades,
             ingreso: v.ingreso,
             costo: costoProducto,
-            margen:
-              v.ingreso > 0 && costoProducto > 0
-                ? Math.round(((v.ingreso - costoProducto) * 100) / v.ingreso)
-                : null,
+            // Por la funcion compartida y no a mano: el mismo calculo
+            // escrito dos veces en dos archivos es el mismo calculo hasta que
+            // alguien corrige uno solo.
+            margen: margenSobreVenta(v.ingreso, costoProducto),
+            margenCosto: margenSobreCosto(v.ingreso, costoProducto),
           };
         })
         .sort((x, y) => y.ingreso - x.ingreso)
@@ -123,7 +162,7 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
 
       const movimientos = new Map<string, number>();
       for (const m of d.movimientos) {
-        if (m.creadoEn < desde || m.tipo === "creacion") continue;
+        if (!enPeriodo(m.creadoEn) || m.tipo === "creacion") continue;
         movimientos.set(m.tipo, (movimientos.get(m.tipo) ?? 0) + m.cantidad);
       }
 
@@ -141,8 +180,19 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
           unidades: renglones.reduce((s, i) => s + i.cantidad, 0),
           ingreso,
           costo,
-          margen: ingreso > 0 && costo > 0 ? Math.round(((ingreso - costo) * 100) / ingreso) : null,
+          margen: margenSobreVenta(ingreso, costo),
+          margenCosto: margenSobreCosto(ingreso, costo),
           ticketPromedio: ventas.length > 0 ? Math.round(ingreso / ventas.length) : 0,
+        },
+
+        // Lo que el informe no puede medir, dicho en vez de escondido.
+        sinCosto: { unidades: unidadesSinCosto, ingreso: ingresoSinCosto },
+
+        // Vendido no es cobrado. Lo fiado ya esta contado arriba como venta
+        // —la mercaderia salio— pero esa plata todavia no entro.
+        fiado: {
+          enElPeriodo: ventas.reduce((s, p) => s + (p.clienteId ? adeudadoDe(p) : 0), 0),
+          total: deudaTotal(d),
         },
 
         porProducto: productos,

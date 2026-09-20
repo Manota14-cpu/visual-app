@@ -143,7 +143,7 @@ export function DialogoPrecios({
                     <th>Producto</th>
                     <th className="text-right">Ahora</th>
                     <th className="text-right">Queda en</th>
-                    <th className="text-right">Margen</th>
+                    <th className="text-right">Margen s/venta</th>
                   </tr>
                 </EncabezadoTabla>
                 <CuerpoTabla>
@@ -152,8 +152,15 @@ export function DialogoPrecios({
                       <td className="max-w-[240px] truncate">{fila.nombre}</td>
                       <td className="cifra text-right text-tinta-suave">{plata(fila.precioActual)}</td>
                       <td className="cifra text-right font-medium">{plata(fila.precioNuevo)}</td>
-                      <td className="cifra text-right text-tinta-suave">
-                        {verPorcentaje(fila.margenNuevo)}
+                      <td className="text-right">
+                        <span className="cifra block text-tinta-suave">
+                          {verPorcentaje(fila.margenNuevo)}
+                        </span>
+                        {fila.margenCostoNuevo !== null && (
+                          <span className="block text-chico text-tinta-tenue">
+                            s/costo {verPorcentaje(fila.margenCostoNuevo)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

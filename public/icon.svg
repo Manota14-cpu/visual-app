@@ -1,25 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!--
     El mismo monograma que dibuja herramientas/icono.mjs, con las mismas
-    proporciones. Los remates son planos: los trazos se recortan contra una
-    franja horizontal, porque un extremo perpendicular al trazo deja la
-    diagonal en punta y la marca se lee escrita a mano en vez de dibujada.
+    proporciones.
+
+    Tres trazos, no cuatro: la pata derecha de la V y la izquierda de la A son
+    el MISMO trazo. Compartiéndolo, el encuentro entre las dos letras es un
+    ángulo limpio a cualquier tamaño, en vez de dos diagonales casi paralelas
+    separadas por un pelo que a 16 píxeles se cierra solo y deja un borrón.
+
+    Los remates son planos: los trazos se recortan contra una franja horizontal,
+    porque un extremo perpendicular al trazo deja la diagonal en punta y la
+    marca se lee escrita a mano en vez de dibujada.
+
+    Blanco sobre el azul de la marca y no al revés: una baldosa de color llena
+    se reconoce por el color aunque no se distinga una sola letra, que es de lo
+    que viven todos los íconos buenos en una barra de tareas.
   -->
   <defs>
     <clipPath id="franja">
-      <rect x="0" y="18.56" width="64" height="28.16" />
+      <rect x="0" y="18" width="64" height="28" />
     </clipPath>
   </defs>
 
-  <rect x="0.5" y="0.5" width="63" height="63" rx="14" fill="#FAFAFA" stroke="#E1E1E4" />
+  <rect width="64" height="64" rx="14" fill="#0071E3" />
 
-  <g clip-path="url(#franja)" stroke="#111111" fill="none" stroke-linecap="butt">
-    <g stroke-width="8.06">
-      <path d="M13.18 18.56 L23.55 46.72" />
-      <path d="M33.92 18.56 L23.55 46.72" />
-      <path d="M43.39 18.56 L34.43 46.72" />
-      <path d="M43.39 18.56 L50.75 46.72" />
+  <g clip-path="url(#franja)" stroke="#FFFFFF" fill="none" stroke-linecap="butt">
+    <g stroke-width="7.4">
+      <path d="M17 18 L27 46" />
+      <path d="M27 46 L37 18" />
+      <path d="M37 18 L47 46" />
     </g>
-    <path d="M36.29 41.28 L49.28 41.28" stroke-width="7.09" />
+    <path d="M30.5 38.2 L43.5 38.2" stroke-width="6.4" />
   </g>
 </svg>

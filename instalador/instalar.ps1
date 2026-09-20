@@ -181,6 +181,24 @@ function CerrarLoAbierto {
     Start-Sleep -Milliseconds 800
 }
 
+<#
+    Renombra insistiendo un rato.
+
+    Windows no deja renombrar una carpeta que algún proceso tenga tomada, y la
+    que se acaba de cerrar puede quedar retenida unos instantes.
+#>
+function RenombrarConPaciencia($de, $a) {
+    for ($intento = 1; $intento -le 10; $intento++) {
+        try {
+            Rename-Item $de $a -ErrorAction Stop
+            return
+        } catch {
+            if ($intento -eq 10) { throw }
+            Start-Sleep -Milliseconds 300
+        }
+    }
+}
+
 function CopiarPrograma {
     param([scriptblock]$Avisar)
 
@@ -227,9 +245,16 @@ function CopiarPrograma {
 
     # El cambio de nombre es lo único que se ve desde afuera, y es instantáneo.
     # Si algo falla acá, se vuelve a poner la copia vieja donde estaba.
+    #
+    # Se reintenta unas cuantas veces antes de darse por vencido. Windows no
+    # deja renombrar una carpeta que algún proceso tenga tomada, y un programa
+    # que se acaba de cerrar puede seguir reteniéndola unos instantes: el
+    # antivirus mirando lo que quedó, el Explorador con la carpeta abierta.
+    # Rendirse al primer intento convertía una espera de medio segundo en una
+    # actualización que no se aplica.
     try {
-        if (Test-Path $destino) { Rename-Item $destino $viejo -ErrorAction Stop }
-        Rename-Item $enObra $destino -ErrorAction Stop
+        if (Test-Path $destino) { RenombrarConPaciencia $destino $viejo }
+        RenombrarConPaciencia $enObra $destino
     } catch {
         if ((Test-Path $viejo) -and -not (Test-Path $destino)) {
             Rename-Item $viejo $destino -ErrorAction SilentlyContinue
@@ -369,16 +394,35 @@ if ($Silencioso) {
     if (RevisarDestino $script:destino) { exit 4 }
     if (-not (PuedeEscribir $script:destino)) { exit 5 }
 
-    CerrarLoAbierto
-    CopiarPrograma
-    CrearAccesos $true
-    AnotarEnWindows
+    # Todo lo que sigue va adentro de un try.
+    #
+    # Sin esto, cualquier error terminante —la carpeta tomada por otro proceso,
+    # el disco lleno, el antivirus— mataba el script y PowerShell salía con 1,
+    # que es el mismo código que "no se encontró Node.js". El que llamaba
+    # informaba esa causa, que no tenía nada que ver, y el verdadero motivo se
+    # perdía. Acá se escribe el error real al lado de los datos y se sale con
+    # un código propio.
+    try {
+        CerrarLoAbierto
+        CopiarPrograma
+        CrearAccesos $true
+        AnotarEnWindows
 
-    if (-not (QuedoBien)) { exit 3 }
+        if (-not (QuedoBien)) { exit 3 }
 
-    # Recién cuando lo nuevo está entero y comprobado se saca lo viejo.
-    LimpiarNombreViejo
-    exit 0
+        # Recién cuando lo nuevo está entero y comprobado se saca lo viejo.
+        LimpiarNombreViejo
+        exit 0
+    } catch {
+        try {
+            $carpeta = Join-Path $env:LOCALAPPDATA "Visual App"
+            if (-not (Test-Path $carpeta)) { New-Item -ItemType Directory -Path $carpeta -Force | Out-Null }
+            $sello = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            Add-Content -Path (Join-Path $carpeta "actualizaciones.log") -Encoding utf8 `
+                -Value "$sello  ERROR del instalador: $($_.Exception.Message)"
+        } catch { }
+        exit 6
+    }
 }
 
 # ─────────────────────────────  Con ventana  ─────────────────────────────

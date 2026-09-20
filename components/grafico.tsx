@@ -32,7 +32,13 @@ export function ColumnasPorDia({ datos }: { datos: { dia: string; total: number 
                 className={
                   esHoy
                     ? "w-full rounded-t-[5px] bg-gradient-to-b from-[#3D9CFF] to-[#0071E3] shadow-[0_2px_8px_-2px_rgba(0,113,227,0.5)] transition-all duration-300 ease-suave"
-                    : "w-full rounded-t-[5px] bg-black/[0.09] transition-all duration-300 ease-suave group-hover:bg-acento/40"
+                    : // Los días anteriores en azul apagado y no en gris. El gris
+                      // decía "esto está apagado": con un negocio de verdad, donde
+                      // todas las ventas están en días pasados, el gráfico entero
+                      // quedaba gris y el panel parecía vacío. Apagado sigue
+                      // dejando que el día de hoy destaque, que es para lo que
+                      // existía la diferencia.
+                      "w-full rounded-t-[5px] bg-acento/[0.28] transition-all duration-300 ease-suave group-hover:bg-acento/50"
                 }
                 style={{ height: `${alto}%` }}
               />

@@ -32,7 +32,10 @@ export interface Producto {
   stock: number;
   stockMinimo: number;
   activo: boolean;
+  /** Sobre la venta: cuanto de cada peso que entra queda. */
   margen: number | null;
+  /** Sobre el costo: cuanto se le suma a lo que se pago. */
+  margenCosto: number | null;
   creadoEn: Fecha;
   actualizadoEn: Fecha;
 }
@@ -74,6 +77,7 @@ export interface FilaPrecio {
   costoActual: number | null;
   costoNuevo: number | null;
   margenNuevo: number | null;
+  margenCostoNuevo: number | null;
 }
 
 export interface Movimiento {
@@ -187,6 +191,10 @@ export interface Caja {
     total: number;
     cantidad: number;
   };
+  /** Lo que quedó fiado en este turno: vendido y no cobrado. */
+  fiadoDelTurno: number;
+  /** Lo que entró por deudas viejas durante el turno. */
+  cobradoDeFiado: number;
   movimientos: MovimientoCaja[];
   retirado: number;
   ingresado: number;
@@ -211,6 +219,7 @@ export interface CajaResumen {
 export interface Arqueo {
   fondo: number;
   efectivo: number;
+  cobradoDeFiado: number;
   total: number;
   retiros: number;
   ingresos: number;
@@ -246,6 +255,8 @@ export interface Cliente {
   creadoEn: Fecha;
   compras: number;
   gastado: number;
+  /** Lo que debe hoy. Cero es que está al día. */
+  debe: number;
   ultimaCompra: Fecha | null;
 }
 
@@ -310,6 +321,8 @@ export interface Panel {
     costoDudoso: number;
     pedidos: number;
   };
+  /** Plata del negocio que está en la calle: lo que deben los clientes. */
+  fiado: number;
   hoyVentas: { cantidad: number; total: number; unidades: number };
   caja: {
     id: string;
@@ -349,8 +362,13 @@ export interface Informe {
     ingreso: number;
     costo: number;
     margen: number | null;
+    margenCosto: number | null;
     ticketPromedio: number;
   };
+  /** Lo que el informe no pudo medir: se vendió sin saber cuánto costaba. */
+  sinCosto: { unidades: number; ingreso: number };
+  /** Vendido no es cobrado: lo que salió fiado. */
+  fiado: { enElPeriodo: number; total: number };
   porProducto: {
     productoId: string | null;
     nombre: string;
@@ -358,6 +376,7 @@ export interface Informe {
     ingreso: number;
     costo: number;
     margen: number | null;
+    margenCosto: number | null;
   }[];
   inmovilizado: {
     id: string;
@@ -468,4 +487,18 @@ export interface Actualizacion {
     tamano: number | null;
   } | null;
   error: string | null;
+}
+
+/** La cuenta de un cliente: de dónde sale lo que debe, renglón por renglón. */
+export interface CuentaCliente {
+  cliente: { id: string; nombre: string; telefono: string | null };
+  debe: number;
+  renglones: {
+    tipo: "venta" | "pago";
+    id: string;
+    detalle: string;
+    /** Positivo suma deuda, negativo la baja. */
+    monto: number;
+    creadoEn: Fecha;
+  }[];
 }

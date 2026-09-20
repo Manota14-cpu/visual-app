@@ -18,6 +18,7 @@ import {
   Vacio,
 } from "@/components/ui";
 import { Icono } from "@/components/iconos";
+import { DialogoCuenta } from "./dialogo-cuenta";
 import { useAvisos } from "@/components/avisos";
 import { useDatos, useEspera } from "@/lib/datos";
 import { api, consulta, ErrorApi } from "@/lib/api";
@@ -36,6 +37,7 @@ export default function PaginaClientes() {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [viendo, setViendo] = useState<Cliente | null>(null);
   const [archivando, setArchivando] = useState<Cliente | null>(null);
+  const [cobrando, setCobrando] = useState<Cliente | null>(null);
   const [trabajando, setTrabajando] = useState(false);
 
   const termino = useEspera(busqueda);
@@ -133,6 +135,7 @@ export default function PaginaClientes() {
                     <th>Contacto</th>
                     <th className="text-right">Compras</th>
                     <th className="text-right">Gastado</th>
+                    <th className="text-right">Debe</th>
                     <th>Última</th>
                     <th className="w-20" />
                   </tr>
@@ -164,6 +167,20 @@ export default function PaginaClientes() {
                       </td>
                       <td className="cifra text-right">{numero(cliente.compras)}</td>
                       <td className="cifra text-right font-medium">{plata(cliente.gastado)}</td>
+                      <td className="text-right">
+                        {cliente.debe > 0 ? (
+                          <button
+                            type="button"
+                            title={`Cobrarle a ${cliente.nombre}`}
+                            onClick={() => setCobrando(cliente)}
+                            className="cifra font-medium text-aviso-texto underline decoration-aviso-linea underline-offset-4 transition-colors hover:text-tinta"
+                          >
+                            {plata(cliente.debe)}
+                          </button>
+                        ) : (
+                          <span className="cifra text-tinta-tenue">—</span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap text-tinta-suave">
                         {cliente.ultimaCompra ? hace(cliente.ultimaCompra) : "nunca"}
                       </td>
@@ -237,6 +254,12 @@ export default function PaginaClientes() {
           setViendo(null);
           setEditando(cliente);
         }}
+      />
+
+      <DialogoCuenta
+        cliente={cobrando}
+        onCerrar={() => setCobrando(null)}
+        onCobrado={() => void recargar()}
       />
 
       <Confirmar

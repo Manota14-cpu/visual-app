@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Boton, Campo, Dialogo, Selector, Area } from "@/components/ui";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { leerNumero, margen, plata } from "@/lib/formato";
+import { leerNumero, margenSobreCosto, margenSobreVenta, plata } from "@/lib/formato";
 import type { Categoria, Producto } from "@/lib/tipos";
 
 const UNIDADES = [
@@ -98,7 +98,11 @@ export function DialogoProducto({
 
   const venta = leerNumero(datos.precioVenta) ?? 0;
   const costo = leerNumero(datos.precioCosto) ?? 0;
-  const ganancia = margen(venta, costo);
+  // Los dos margenes, porque son dos numeros distintos de la misma
+  // operacion: quien pone el precio piensa en lo que le suma al costo, y el
+  // informe de fin de mes habla de lo que queda de cada peso que entra.
+  const sobreVenta = margenSobreVenta(venta, costo);
+  const sobreCosto = margenSobreCosto(venta, costo);
 
   async function guardar() {
     if (!datos.nombre.trim()) {
@@ -192,8 +196,9 @@ export function DialogoProducto({
             inputMode="decimal"
             placeholder="0"
             ayuda={
-              ganancia !== null
-                ? `Deja ${ganancia}% de margen (${plata(venta - costo)} por unidad)`
+              sobreVenta !== null
+                ? `${sobreCosto}% sobre el costo · ${sobreVenta}% sobre la venta · ` +
+                  `${plata(venta - costo)} por unidad`
                 : "Dejalo vacío si todavía no lo sabés."
             }
             {...campo("precioCosto")}

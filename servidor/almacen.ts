@@ -82,7 +82,7 @@ export class Almacen {
     try {
       const texto = fs.readFileSync(this.archivo, "utf8");
       if (!texto.trim()) return inicial();
-      return JSON.parse(texto) as BaseDatos;
+      return normalizar(JSON.parse(texto) as BaseDatos);
     } catch (error) {
       // Un archivo ilegible no se pisa: se aparta con la fecha en el nombre y
       // se arranca limpio. Perder los datos en silencio sería peor que
@@ -222,7 +222,7 @@ export class Almacen {
     }
 
     const respaldoPrevio = this.copiar();
-    this.datos = nueva;
+    this.datos = normalizar(nueva);
     this.guardar();
 
     return { desde: nombre, respaldoPrevio: path.basename(respaldoPrevio) };
@@ -295,6 +295,19 @@ export class Almacen {
   }
 }
 
+/**
+ * Completa lo que una base guardada antes no tenia.
+ *
+ * El archivo de una version vieja no conoce las listas que se agregaron
+ * despues, y sin esto el programa arranca y explota al primer recorrido con un
+ * "no es iterable". Es la migracion mas barata posible: agregar lo que falta y
+ * no tocar nada de lo que ya estaba.
+ */
+function normalizar(d: BaseDatos): BaseDatos {
+  d.cobrosFiado ??= [];
+  return d;
+}
+
 /** Una base vacía, con una categoría para poder cargar el primer producto. */
 export function inicial(): BaseDatos {
   const ahora = new Date().toISOString();
@@ -310,6 +323,7 @@ export function inicial(): BaseDatos {
     clientes: [],
     gastos: [],
     cajas: [],
+    cobrosFiado: [],
     contadores: { pedido: 0, caja: 0 },
   };
 }

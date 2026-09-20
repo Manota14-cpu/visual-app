@@ -135,7 +135,28 @@ export function nuevoPrecio(actual: number, porcentajeCambio: number, redondeo: 
   return Math.max(0, redondeado);
 }
 
-export function margen(precioVenta: number, precioCosto: number | null): number | null {
+/**
+ * Las dos formas de mirar la misma diferencia entre costo y venta.
+ *
+ * Algo que cuesta $100 y se vende a $150 deja 50% sobre el costo —«le pongo un
+ * cincuenta»— y 33% sobre la venta —de cada peso que entra, treinta y tres
+ * centavos—. Quien atiende piensa en el primero; los informes hablan del
+ * segundo. Es el mismo cálculo que hace el servidor, escrito dos veces porque
+ * las pantallas no comparten código con él, y los dos están cubiertos por sus
+ * pruebas.
+ */
+export function margenSobreVenta(
+  precioVenta: number,
+  precioCosto: number | null
+): number | null {
   if (!precioVenta || precioVenta <= 0 || !precioCosto || precioCosto <= 0) return null;
   return Math.round(((precioVenta - precioCosto) / precioVenta) * 100);
+}
+
+export function margenSobreCosto(
+  precioVenta: number,
+  precioCosto: number | null
+): number | null {
+  if (!precioVenta || precioVenta <= 0 || !precioCosto || precioCosto <= 0) return null;
+  return Math.round(((precioVenta - precioCosto) / precioCosto) * 100);
 }

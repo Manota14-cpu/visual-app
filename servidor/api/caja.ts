@@ -3,8 +3,12 @@ import { noEncontrado, type Ruteador } from "../http.ts";
 import {
   ajustarStock,
   cajaAbierta,
+  cobrosFiadoDe,
+  adeudadoDe,
   comoPlata,
+  deudaDe,
   efectivoDe,
+  efectivoDeFiadoDe,
   entero,
   esperadoEn,
   exigirCajaAbierta,
@@ -23,6 +27,18 @@ interface Renglon {
   unidad: string;
   precio: number;
   cantidad: number;
+}
+
+/**
+ * El costo del producto hoy, que es el del día de la venta.
+ *
+ * Se copia al renglón por la misma razón que se copia el nombre: lo que se
+ * guarda tiene que seguir siendo verdad mañana, aunque el catálogo cambie.
+ */
+function costoDelDia(d: BaseDatos, productoId: string | null): number | null {
+  if (!productoId) return null;
+  const producto = d.productos.find((p) => p.id === productoId);
+  return producto?.precioCosto ?? null;
 }
 
 /**
@@ -136,7 +152,6 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         monto: number;
       }[];
 
-      if (pagos.length === 0) throw new Regla("Falta indicar cómo se pagó.");
       if (pagos.length > 4) throw new Regla("Son demasiadas formas de pago para una venta.");
 
       const limpios = pagos.map((p) => {
@@ -149,16 +164,38 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       });
 
       const pagado = limpios.reduce((s, p) => s + p.monto, 0);
-      // Tiene que ser exactamente el total: si no, el arqueo de cierre
-      // arrastraría una diferencia que mañana nadie va a poder explicar.
-      if (pagado !== total) {
-        throw new Regla(
-          `Lo cobrado (${comoPlata(pagado)}) no coincide con el total de la venta (${comoPlata(total)}).`
-        );
+      const cliente = buscarCliente(d, cuerpo.clienteId);
+      const fiar = cuerpo.fiar === true;
+
+      // Lo cobrado tiene que dar exactamente el total, salvo que se este
+      // fiando. Sin esa regla el arqueo de cierre arrastraria una diferencia
+      // que manana nadie va a poder explicar.
+      //
+      // Fiar es la unica excepcion, y exige un cliente: una deuda sin nombre no
+      // se puede cobrar nunca, y "Mostrador" no es un nombre. Es la diferencia
+      // entre una cuenta y un faltante.
+      if (fiar) {
+        if (!cliente) {
+          throw new Regla("Para fiar hay que elegir el cliente: una deuda sin nombre no se cobra.");
+        }
+        if (pagado > total) {
+          throw new Regla(
+            `Lo entregado (${comoPlata(pagado)}) es mas que el total de la venta (${comoPlata(total)}).`
+          );
+        }
+        if (pagado === total) {
+          throw new Regla("Esta venta se pago entera: no queda nada fiado.");
+        }
+      } else {
+        if (limpios.length === 0) throw new Regla("Falta indicar cómo se pagó.");
+        if (pagado !== total) {
+          throw new Regla(
+            `Lo cobrado (${comoPlata(pagado)}) no coincide con el total de la venta (${comoPlata(total)}).`
+          );
+        }
       }
 
       const metodos = new Set(limpios.map((p) => p.metodo));
-      const cliente = buscarCliente(d, cuerpo.clienteId);
       const recibido = entero(cuerpo.recibido, 0);
 
       const pedido: Pedido = {
@@ -172,7 +209,9 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         clienteId: cliente?.id ?? null,
         notas: recortar(cuerpo.notas as string, 400),
         total,
-        metodoPago: metodos.size === 1 ? limpios[0]!.metodo : "mixto",
+        // Una venta fiada se etiqueta como tal aunque haya entregado algo: lo
+        // que la define es lo que quedo debiendo, no lo que adelanto.
+        metodoPago: fiar ? "fiado" : metodos.size === 1 ? limpios[0]!.metodo : "mixto",
         recibido: recibido > 0 ? recibido : null,
         cajaId: caja.id,
         pagos: limpios,
@@ -187,6 +226,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
           nombre: item.nombre,
           unidadMedida: item.unidad,
           precio: item.precio,
+          costo: costoDelDia(d, item.productoId),
           cantidad: item.cantidad,
         });
 
@@ -206,7 +246,9 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         numero: pedido.numero,
         total: pedido.total,
         // El vuelto nunca es negativo: si entregó de menos, no hay vuelto.
-        vuelto: Math.max(0, recibido - enEfectivo),
+        vuelto: fiar ? 0 : Math.max(0, recibido - enEfectivo),
+        fiado: total - pagado,
+        deudaCliente: cliente ? deudaDe(d, cliente.id) : 0,
       };
     })
   );
@@ -257,6 +299,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
           nombre: item.nombre,
           unidadMedida: item.unidad,
           precio: item.precio,
+          costo: costoDelDia(d, item.productoId),
           cantidad: -item.cantidad,
         });
 
@@ -267,6 +310,60 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
 
       d.pedidos.push(pedido);
       return { id: pedido.id, numero: pedido.numero, total };
+    })
+  );
+
+  /**
+   * Un cliente trae plata contra lo que debe.
+   *
+   * Va por la caja y no por la agenda de clientes porque, si entro en efectivo,
+   * la plata esta en el cajon y el arqueo del turno tiene que contarla. Cobrar
+   * sin turno abierto se permite —la transferencia del domingo existe— y en ese
+   * caso el cobro queda sin caja.
+   */
+  r.post("/caja/cobrar-fiado", ({ cuerpo }) =>
+    a.escribir((d) => {
+      const cliente = buscarCliente(d, cuerpo.clienteId);
+      if (!cliente) throw new Regla("Elegí el cliente que está pagando.");
+
+      const metodo = (MEDIOS_PAGO as readonly string[]).includes(String(cuerpo.metodo))
+        ? String(cuerpo.metodo)
+        : "efectivo";
+
+      const monto = entero(cuerpo.monto, 0);
+      if (monto <= 0) throw new Regla("El monto tiene que ser mayor a cero.");
+
+      // No se puede pagar mas de lo que se debe: un saldo a favor es otra cosa
+      // —una sena, un adelanto— y merece su propia decision, no colarse por
+      // acá como un numero negativo que despues nadie entiende.
+      const debe = deudaDe(d, cliente.id);
+      if (debe <= 0) throw new Regla(`${cliente.nombre} no tiene deuda.`);
+      if (monto > debe) {
+        throw new Regla(`${cliente.nombre} debe ${comoPlata(debe)}: no se puede cobrar de más.`);
+      }
+
+      const caja = cajaAbierta(d);
+
+      d.cobrosFiado.push({
+        id: nuevoId(),
+        clienteId: cliente.id,
+        nombre: cliente.nombre,
+        monto,
+        metodo,
+        // Se ata al turno cualquiera sea el medio: sirve para saber que entro
+        // durante el turno. Solo el efectivo toca el cajon, y de eso se ocupa
+        // `efectivoDe`, que filtra por medio.
+        cajaId: caja?.id ?? null,
+        nota: recortar(cuerpo.nota as string, 200),
+        creadoEn: new Date().toISOString(),
+      });
+
+      return {
+        cliente: cliente.nombre,
+        cobrado: monto,
+        saldo: deudaDe(d, cliente.id),
+        enTurno: caja?.numero ?? null,
+      };
     })
   );
 
@@ -281,7 +378,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       const efectivo = efectivoDe(d, caja.id);
       const retiros = caja.movimientos.filter((m) => m.tipo === "retiro").reduce((s, m) => s + m.monto, 0);
       const ingresos = caja.movimientos.filter((m) => m.tipo === "ingreso").reduce((s, m) => s + m.monto, 0);
-      const esperado = caja.fondo + efectivo + ingresos - retiros;
+      const deFiado = efectivoDeFiadoDe(d, caja.id);
+      const esperado = caja.fondo + efectivo + deFiado + ingresos - retiros;
 
       caja.estado = "cerrada";
       caja.contado = contado;
@@ -291,6 +389,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       return {
         fondo: caja.fondo,
         efectivo,
+        cobradoDeFiado: deFiado,
         total: ventas.reduce((s, v) => s + v.total, 0),
         retiros,
         ingresos,
@@ -390,6 +489,11 @@ export function vista(d: BaseDatos, caja: Caja) {
       total: ventas.reduce((s, v) => s + v.total, 0),
       cantidad: ventas.length,
     },
+
+    // Lo fiado en el turno y lo cobrado de deudas viejas: son las dos formas
+    // en que la plata del turno no coincide con lo vendido.
+    fiadoDelTurno: ventas.reduce((s, v) => s + adeudadoDe(v), 0),
+    cobradoDeFiado: cobrosFiadoDe(d, caja.id).reduce((s, c) => s + c.monto, 0),
 
     movimientos: [...caja.movimientos].sort((x, y) => y.creadoEn.localeCompare(x.creadoEn)),
     retirado: caja.movimientos.filter((m) => m.tipo === "retiro").reduce((s, m) => s + m.monto, 0),

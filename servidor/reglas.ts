@@ -96,10 +96,39 @@ export function nuevoPrecio(actual: number, porcentaje: number, redondeo: number
   return Math.max(0, redondeado);
 }
 
-/** Margen sobre el precio de venta. Nulo si no hay con qué calcularlo. */
-export function margen(precioVenta: number, precioCosto: number | null): number | null {
+/**
+ * Las dos formas de mirar la misma diferencia entre costo y venta.
+ *
+ * No son dos opiniones: son dos números distintos de la misma operación, y
+ * confundirlos es el error más caro que se puede cometer poniendo precios.
+ *
+ * Algo que cuesta $100 y se vende a $150 deja:
+ *
+ *   sobre costo  →  50%   «le pongo un cincuenta por ciento»
+ *   sobre venta  →  33%   de cada peso que entra, treinta y tres centavos
+ *
+ * Quien atiende el mostrador piensa en el primero: es lo que le suma al costo.
+ * El contador y los informes hablan del segundo, porque es el que se compara
+ * con los gastos. Mostrar uno solo obliga a adivinar cuál es, y quien creía
+ * estar ganando 50 se entera de que gana 33 cuando ya remarcó el catálogo.
+ */
+
+/** Sobre la venta: cuánto de cada peso que entra queda. El del contador. */
+export function margenSobreVenta(
+  precioVenta: number,
+  precioCosto: number | null
+): number | null {
   if (precioVenta <= 0 || !precioCosto || precioCosto <= 0) return null;
   return Math.round(((precioVenta - precioCosto) * 100) / precioVenta);
+}
+
+/** Sobre el costo: cuánto se le suma a lo que se pagó. El del mostrador. */
+export function margenSobreCosto(
+  precioVenta: number,
+  precioCosto: number | null
+): number | null {
+  if (precioVenta <= 0 || !precioCosto || precioCosto <= 0) return null;
+  return Math.round(((precioVenta - precioCosto) * 100) / precioCosto);
 }
 
 // ──────────────────────────────────  Caja  ──────────────────────────────────
@@ -136,6 +165,21 @@ export function efectivoDe(d: BaseDatos, cajaId: string): number {
     .reduce((suma, p) => suma + p.monto, 0);
 }
 
+/**
+ * Lo que entro al cajon por deudas viejas.
+ *
+ * Va aparte de `efectivoDe` y no sumado adentro: las dos cosas son plata en el
+ * cajon, pero una es de lo que se vendio hoy y la otra de lo que se vendio
+ * quien sabe cuando. Mezcladas en un solo numero, el desglose del cierre deja
+ * de explicar de donde sale lo que deberia haber, que es justamente para lo
+ * que alguien lo mira.
+ */
+export function efectivoDeFiadoDe(d: BaseDatos, cajaId: string): number {
+  return cobrosFiadoDe(d, cajaId)
+    .filter((c) => c.metodo === "efectivo")
+    .reduce((suma, c) => suma + c.monto, 0);
+}
+
 /** Lo que debería haber en el cajón: fondo + efectivo + ingresos − retiros. */
 export function esperadoEn(d: BaseDatos, caja: Caja): number {
   const ingresos = caja.movimientos
@@ -145,7 +189,57 @@ export function esperadoEn(d: BaseDatos, caja: Caja): number {
     .filter((m) => m.tipo === "retiro")
     .reduce((s, m) => s + m.monto, 0);
 
-  return caja.fondo + efectivoDe(d, caja.id) + ingresos - retiros;
+  return (
+    caja.fondo + efectivoDe(d, caja.id) + efectivoDeFiadoDe(d, caja.id) + ingresos - retiros
+  );
+}
+
+// ─────────────────────────────────  Fiado  ─────────────────────────────────
+
+/**
+ * Lo que falta cobrar de una venta.
+ *
+ * Una venta fiada se guarda igual que cualquier otra —con su stock descontado y
+ * su renglon en el informe— pero con los pagos que de verdad entraron, que
+ * pueden ser ninguno. La diferencia contra el total es lo que el cliente debe.
+ */
+export function adeudadoDe(pedido: Pedido): number {
+  if (pedido.estado === "cancelado") return 0;
+  const pagado = pedido.pagos.reduce((s, p) => s + p.monto, 0);
+  return Math.max(0, pedido.total - pagado);
+}
+
+/**
+ * Lo que un cliente debe hoy: lo que quedo sin pagar de sus ventas, menos lo
+ * que fue trayendo.
+ *
+ * No hay un saldo guardado. Un numero aparte es un numero mas que puede quedar
+ * desincronizado de los hechos que lo explican, y con plata ajena eso no se
+ * puede permitir: el saldo se vuelve a sumar cada vez, de las ventas y de los
+ * cobros, que son lo unico que de verdad paso.
+ */
+export function deudaDe(d: BaseDatos, clienteId: string): number {
+  const fiado = d.pedidos
+    .filter((p) => p.clienteId === clienteId)
+    .reduce((s, p) => s + adeudadoDe(p), 0);
+
+  const cobrado = d.cobrosFiado
+    .filter((c) => c.clienteId === clienteId)
+    .reduce((s, c) => s + c.monto, 0);
+
+  return fiado - cobrado;
+}
+
+/** Lo que debe todo el mundo. Es plata del negocio que esta en la calle. */
+export function deudaTotal(d: BaseDatos): number {
+  const fiado = d.pedidos.reduce((s, p) => s + (p.clienteId ? adeudadoDe(p) : 0), 0);
+  const cobrado = d.cobrosFiado.reduce((s, c) => s + c.monto, 0);
+  return fiado - cobrado;
+}
+
+/** Los cobros de fiado que entraron durante un turno. */
+export function cobrosFiadoDe(d: BaseDatos, cajaId: string) {
+  return d.cobrosFiado.filter((c) => c.cajaId === cajaId);
 }
 
 // ─────────────────────────────────  Gastos  ─────────────────────────────────

@@ -275,7 +275,7 @@ function Catalogo() {
                     <th className="text-right">Stock</th>
                     <th className="text-right">Costo</th>
                     <th className="text-right">Venta</th>
-                    <th className="text-right">Margen</th>
+                    <th className="text-right">Margen s/venta</th>
                     <th className="w-28" />
                   </tr>
                 </EncabezadoTabla>
@@ -349,8 +349,15 @@ function Catalogo() {
 
                         <td className="cifra text-right font-medium">{plata(producto.precioVenta)}</td>
 
-                        <td className="cifra text-right text-tinta-suave">
-                          {porcentaje(producto.margen)}
+                        <td className="text-right">
+                          <span className="cifra block text-tinta-suave">
+                            {porcentaje(producto.margen)}
+                          </span>
+                          {producto.margenCosto !== null && (
+                            <span className="block text-chico text-tinta-tenue">
+                              s/costo {porcentaje(producto.margenCosto)}
+                            </span>
+                          )}
                         </td>
 
                         <td>

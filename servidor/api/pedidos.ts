@@ -132,6 +132,16 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       if (entradas.length === 0) throw new Regla("El pedido tiene que tener al menos un renglón.");
       if (entradas.length > 60) throw new Regla("No se pueden cargar más de 60 renglones en un pedido.");
 
+      // El costo que ya tenia cada producto en este pedido. Editar una venta
+      // no puede reescribir lo que costo el dia que se hizo: si el renglon ya
+      // traia su costo, se conserva; si es un renglon nuevo, se copia el de hoy.
+      const costoPrevio = new Map<string, number | null>();
+      for (const viejo of pedido.items) {
+        if (viejo.productoId && viejo.costo !== null && viejo.costo !== undefined) {
+          costoPrevio.set(viejo.productoId, viejo.costo);
+        }
+      }
+
       const nuevos: ItemPedido[] = entradas.map((item) => {
         const nombre = recortarObligatorio(item.nombre as string, 160, "Falta el nombre de un renglón.");
         const cantidad = entero(item.cantidad, 0);
@@ -140,12 +150,19 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
         if (cantidad <= 0) throw new Regla("La cantidad tiene que ser al menos 1.");
         if (precio < 0) throw new Regla("Un precio no puede ser negativo.");
 
+        const productoId = recortar(item.productoId as string, 64);
+
         return {
           id: nuevoId(),
-          productoId: recortar(item.productoId as string, 64),
+          productoId,
           nombre,
           unidadMedida: recortar(item.unidadMedida as string, 24) ?? "unidad",
           precio,
+          costo: productoId
+            ? (costoPrevio.get(productoId) ??
+              d.productos.find((p) => p.id === productoId)?.precioCosto ??
+              null)
+            : null,
           cantidad,
         };
       });

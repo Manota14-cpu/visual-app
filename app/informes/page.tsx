@@ -61,12 +61,17 @@ export default function PaginaInformes() {
             <Metrica
               rotulo="Costó"
               valor={plata(datos.ventas.costo)}
-              pie="Con el costo actual de cada producto"
+              pie="Con el costo que tenía cada producto el día que se vendió"
             />
             <Metrica
-              rotulo="Margen"
+              rotulo="Margen s/venta"
               valor={porcentaje(datos.ventas.margen)}
-              pie={`Ticket promedio ${plata(datos.ventas.ticketPromedio)}`}
+              pie={
+                datos.ventas.margenCosto === null
+                  ? `Ticket promedio ${plata(datos.ventas.ticketPromedio)}`
+                  : `${porcentaje(datos.ventas.margenCosto)} sobre el costo · ` +
+                    `ticket promedio ${plata(datos.ventas.ticketPromedio)}`
+              }
             />
             <Metrica
               rotulo="Resultado"
@@ -77,6 +82,23 @@ export default function PaginaInformes() {
               }
             />
           </section>
+
+          {datos.fiado.enElPeriodo > 0 && (
+            <Aviso tono="dato">
+              {plata(datos.fiado.enElPeriodo)} de lo vendido en el período salió fiado y todavía no
+              entró. Vendido no es cobrado: en total hay {plata(datos.fiado.total)} en la calle.
+            </Aviso>
+          )}
+
+          {datos.sinCosto.unidades > 0 && (
+            <Aviso tono="alerta">
+              Se vendieron {numero(datos.sinCosto.unidades)}{" "}
+              {datos.sinCosto.unidades === 1 ? "unidad" : "unidades"} por{" "}
+              {plata(datos.sinCosto.ingreso)} de productos que no tienen costo cargado. Esa plata
+              entra al informe como ganancia pura: el margen y el resultado de arriba están
+              exagerados hasta que les cargues el costo.
+            </Aviso>
+          )}
 
           {datos.ventasConCostoDudoso > 0 && (
             <Aviso>
@@ -98,7 +120,7 @@ export default function PaginaInformes() {
                       <th>Producto</th>
                       <th className="text-right">Unidades</th>
                       <th className="text-right">Vendido</th>
-                      <th className="text-right">Margen</th>
+                      <th className="text-right">Margen s/venta</th>
                     </tr>
                   </EncabezadoTabla>
                   <CuerpoTabla>
@@ -107,7 +129,16 @@ export default function PaginaInformes() {
                         <td className="max-w-[280px] truncate">{fila.nombre}</td>
                         <td className="cifra text-right">{numero(fila.unidades)}</td>
                         <td className="cifra text-right font-medium">{plata(fila.ingreso)}</td>
-                        <td className="cifra text-right text-tinta-suave">{porcentaje(fila.margen)}</td>
+                        <td className="text-right">
+                          <span className="cifra block text-tinta-suave">
+                            {porcentaje(fila.margen)}
+                          </span>
+                          {fila.margenCosto !== null && (
+                            <span className="block text-chico text-tinta-tenue">
+                              s/costo {porcentaje(fila.margenCosto)}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </CuerpoTabla>

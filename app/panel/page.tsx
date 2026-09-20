@@ -68,6 +68,15 @@ export default function PaginaPanel() {
           </section>
 
           <section className="flex flex-wrap gap-2">
+            {datos.fiado > 0 && (
+              <Link
+                href="/clientes"
+                className="inline-flex items-center gap-1.5 rounded-full border border-aviso-linea bg-aviso-fondo px-3 py-1.5 text-chico font-medium text-aviso-texto transition-colors hover:brightness-95"
+              >
+                {plata(datos.fiado)} fiados
+                <Icono nombre="flecha-derecha" tamano={13} />
+              </Link>
+            )}
             <Pendiente
               cantidad={datos.stock.bajo}
               href="/productos?estado=bajo"

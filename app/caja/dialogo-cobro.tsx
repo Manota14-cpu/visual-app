@@ -34,7 +34,16 @@ export function DialogoCobro({
   cajaId: string;
   items: ItemCobro[];
   onCerrar: () => void;
-  onCobrado: (venta: { id: string; numero: number; total: number; vuelto: number }) => void;
+  onCobrado: (venta: {
+    id: string;
+    numero: number;
+    total: number;
+    vuelto: number;
+    /** Lo que quedó debiendo esta venta. Cero si se pagó entera. */
+    fiado: number;
+    /** Lo que el cliente debe en total después de esta venta. */
+    deudaCliente: number;
+  }) => void;
 }) {
   const avisos = useAvisos();
   const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
@@ -44,6 +53,7 @@ export function DialogoCobro({
   const [nombre, setNombre] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [notas, setNotas] = useState("");
+  const [fiar, setFiar] = useState(false);
   const [cobrando, setCobrando] = useState(false);
 
   const pagos = tramos.map((t) => ({ metodo: t.metodo, monto: Math.round(leerNumero(t.monto) ?? 0) }));
@@ -55,6 +65,13 @@ export function DialogoCobro({
   // Un tramo en cero no es una forma de pago. El backend lo rechaza, así que
   // conviene no dejar llegar hasta ahí: se avisa acá, al lado del renglón.
   const hayTramoVacio = pagos.some((p) => p.monto <= 0);
+
+  // Fiar exige un cliente: una deuda sin nombre no se cobra nunca. Y tiene que
+  // quedar algo debiendo, si no es una venta común.
+  const puedeFiar = fiar && clienteId !== null && falta > 0;
+  const listoParaCobrar = fiar
+    ? puedeFiar && !hayTramoVacio && items.length > 0
+    : falta === 0 && !hayTramoVacio && items.length > 0;
 
   /**
    * Divide el cobro en dos.
@@ -106,13 +123,21 @@ export function DialogoCobro({
   async function cobrar() {
     setCobrando(true);
     try {
-      const venta = await api.post<{ id: string; numero: number; total: number; vuelto: number }>(
+      const venta = await api.post<{
+        id: string;
+        numero: number;
+        total: number;
+        vuelto: number;
+        fiado: number;
+        deudaCliente: number;
+      }>(
         "/caja/cobrar",
         {
           cajaId,
           clienteId,
           nombre,
           notas,
+          fiar,
           recibido: Math.round(leerNumero(recibido) ?? 0),
           pagos,
           items: items.map((i) => ({
@@ -148,9 +173,15 @@ export function DialogoCobro({
           <Boton
             tono="principal"
             onClick={() => void cobrar()}
-            disabled={cobrando || falta !== 0 || hayTramoVacio || items.length === 0}
+            disabled={cobrando || !listoParaCobrar}
           >
-            {cobrando ? "Cobrando…" : `Cobrar ${plata(total)}`}
+            {cobrando
+              ? fiar
+                ? "Fiando…"
+                : "Cobrando…"
+              : fiar
+                ? `Fiar ${plata(falta)}`
+                : `Cobrar ${plata(total)}`}
           </Boton>
         </>
       }
@@ -234,8 +265,12 @@ export function DialogoCobro({
             )}
 
             {falta !== 0 ? (
-              <Etiqueta tono={falta > 0 ? "aviso" : "alerta"}>
-                {falta > 0 ? `faltan ${plata(falta)}` : `sobran ${plata(-falta)}`}
+              <Etiqueta tono={falta < 0 ? "alerta" : fiar ? "dato" : "aviso"}>
+                {falta > 0
+                  ? fiar
+                    ? `quedan ${plata(falta)} fiados`
+                    : `faltan ${plata(falta)}`
+                  : `sobran ${plata(-falta)}`}
               </Etiqueta>
             ) : hayTramoVacio ? (
               <Etiqueta tono="aviso">poné cuánto va en cada medio</Etiqueta>
@@ -268,6 +303,37 @@ export function DialogoCobro({
           }}
           clienteElegido={clienteId !== null}
         />
+
+        {/* Fiar. Va debajo del cliente a propósito: el orden en pantalla es el
+            orden de la decisión, porque sin cliente no hay a quién cobrarle. */}
+        <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo px-3 py-2.5">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={fiar}
+              onChange={(e) => setFiar(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer"
+            />
+            <span className="min-w-0">
+              <span className="block text-base">Queda fiado</span>
+              <span className="block text-chico text-tinta-suave">
+                Se lleva la mercadería y paga después. Lo que entregue ahora va arriba; el resto
+                queda en su cuenta.
+              </span>
+            </span>
+          </label>
+
+          {fiar && clienteId === null && (
+            <Etiqueta tono="alerta">
+              Elegí el cliente de la agenda: una deuda sin nombre no se cobra nunca
+            </Etiqueta>
+          )}
+          {fiar && clienteId !== null && falta <= 0 && (
+            <Etiqueta tono="aviso">
+              {falta === 0 ? "Esta venta se paga entera: no queda nada fiado" : "Está entregando de más"}
+            </Etiqueta>
+          )}
+        </div>
 
         <Area
           etiqueta="Notas"
