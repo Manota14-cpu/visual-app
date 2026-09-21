@@ -6,7 +6,7 @@ import { Boton, Cargando, Etiqueta, Hoja, Metrica, Vacio } from "@/components/ui
 import { ColumnasPorDia, BarrasEtiquetadas } from "@/components/grafico";
 import { Icono } from "@/components/iconos";
 import { useDatos } from "@/lib/datos";
-import { hace, numero, plata } from "@/lib/formato";
+import { hace, llevado, numero, plata } from "@/lib/formato";
 import type { Panel } from "@/lib/tipos";
 
 const NOMBRE_MOVIMIENTO: Record<string, string> = {
@@ -43,7 +43,7 @@ export default function PaginaPanel() {
             <Metrica
               rotulo="Vendido hoy"
               valor={plata(datos.hoyVentas.total)}
-              pie={`${numero(datos.hoyVentas.cantidad)} ${datos.hoyVentas.cantidad === 1 ? "venta" : "ventas"} · ${numero(datos.hoyVentas.unidades)} unidades`}
+              pie={`${numero(datos.hoyVentas.cantidad)} ${datos.hoyVentas.cantidad === 1 ? "venta" : "ventas"} · ${llevado(datos.hoyVentas.unidades, datos.hoyVentas.gramos)}`}
             />
             <Metrica
               rotulo="Stock a precio de venta"
@@ -53,7 +53,7 @@ export default function PaginaPanel() {
             <Metrica
               rotulo="Productos"
               valor={numero(datos.stock.productos)}
-              pie={`${numero(datos.stock.unidades)} unidades en depósito`}
+              pie={`${llevado(datos.stock.unidades, datos.stock.gramos)} en depósito`}
             />
             <Metrica
               rotulo="Caja"

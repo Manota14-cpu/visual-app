@@ -5,7 +5,7 @@ import { Area, Boton, Campo, Dialogo, Vacio } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { numero, plata } from "@/lib/formato";
+import { importeRenglon, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, MEDIOS_PAGO, type ItemCobro, type MedioPago } from "@/lib/tipos";
 import { BuscadorProductos } from "./buscador-productos";
@@ -35,7 +35,10 @@ export function DialogoDevolucion({
   const [notas, setNotas] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
-  const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
+  const total = items.reduce(
+    (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
+    0
+  );
 
   async function devolver() {
     setTrabajando(true);
@@ -93,10 +96,14 @@ export function DialogoDevolucion({
           placeholder="Qué producto vuelve"
           onElegir={(producto) =>
             setItems((previos) => {
+              // Lo que vuelve de un producto por peso se cuenta en gramos, así
+              // que sumar "uno" sería sumar un gramo. Arranca en un kilo, igual
+              // que en el cobro.
+              const paso = producto.porPeso ? 1000 : 1;
               const existente = previos.find((i) => i.productoId === producto.id);
               if (existente) {
                 return previos.map((i) =>
-                  i.productoId === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i
+                  i.productoId === producto.id ? { ...i, cantidad: i.cantidad + paso } : i
                 );
               }
               return [
@@ -106,7 +113,8 @@ export function DialogoDevolucion({
                   nombre: producto.nombre,
                   unidadMedida: producto.unidadMedida,
                   precio: producto.precio,
-                  cantidad: 1,
+                  porPeso: producto.porPeso,
+                  cantidad: paso,
                   stock: producto.stock,
                 },
               ];

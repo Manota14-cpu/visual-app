@@ -11,7 +11,9 @@ import {
   efectivoDeFiadoDe,
   entero,
   esperadoEn,
+  contarRenglones,
   exigirCajaAbierta,
+  importeRenglon,
   recortar,
   recortarObligatorio,
   ventasDe,
@@ -26,6 +28,8 @@ interface Renglon {
   nombre: string;
   unidad: string;
   precio: number;
+  /** El precio es por kilo y la cantidad va en gramos. */
+  porPeso: boolean;
   cantidad: number;
 }
 
@@ -144,8 +148,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
   r.post("/caja/cobrar", ({ cuerpo }) =>
     a.escribir((d) => {
       const caja = exigirCajaAbierta(d, String(cuerpo.cajaId ?? ""));
-      const items = validarItems(cuerpo.items, "cobrar");
-      const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0);
+      const items = validarItems(d, cuerpo.items, "cobrar");
+      const total = items.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
 
       const pagos = (Array.isArray(cuerpo.pagos) ? cuerpo.pagos : []) as {
         metodo: string;
@@ -227,6 +231,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
           unidadMedida: item.unidad,
           precio: item.precio,
           costo: costoDelDia(d, item.productoId),
+          porPeso: item.porPeso,
           cantidad: item.cantidad,
         });
 
@@ -256,8 +261,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
   r.post("/caja/devolver", ({ cuerpo }) =>
     a.escribir((d) => {
       const caja = exigirCajaAbierta(d, String(cuerpo.cajaId ?? ""));
-      const items = validarItems(cuerpo.items, "devolver");
-      const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0);
+      const items = validarItems(d, cuerpo.items, "devolver");
+      const total = items.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
 
       const metodo = (MEDIOS_PAGO as readonly string[]).includes(String(cuerpo.metodoPago))
         ? String(cuerpo.metodoPago)
@@ -300,6 +305,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
           unidadMedida: item.unidad,
           precio: item.precio,
           costo: costoDelDia(d, item.productoId),
+          porPeso: item.porPeso,
           cantidad: -item.cantidad,
         });
 
@@ -422,7 +428,7 @@ function buscarCliente(d: BaseDatos, clienteId: unknown) {
   return d.clientes.find((c) => c.id === clienteId);
 }
 
-function validarItems(items: unknown, verbo: string): Renglon[] {
+function validarItems(d: BaseDatos, items: unknown, verbo: string): Renglon[] {
   if (!Array.isArray(items) || items.length === 0) throw new Regla(`No hay nada para ${verbo}.`);
   if (items.length > MAX_RENGLONES) {
     throw new Regla(`No se pueden ${verbo} más de ${MAX_RENGLONES} renglones juntos.`);
@@ -432,17 +438,32 @@ function validarItems(items: unknown, verbo: string): Renglon[] {
     const nombre = recortarObligatorio(item.nombre as string, 160, "Falta el nombre de un renglón.");
     const cantidad = entero(item.cantidad, 0);
     const precio = entero(item.precio, 0);
+    const productoId = recortar(item.productoId as string, 64);
 
-    if (cantidad <= 0) throw new Regla("La cantidad tiene que ser al menos 1.");
-    if (cantidad > 1_000_000) throw new Regla("Esa cantidad es demasiado grande.");
+    // Si se vende por peso lo dice el catálogo, no la pantalla. Es una decisión
+    // del producto —el pan se vende por peso siempre— y dejársela declarar a
+    // quien manda el pedido permitiría cobrar un kilo al precio de un gramo.
+    const porPeso = productoId
+      ? (d.productos.find((p) => p.id === productoId)?.porPeso ?? false)
+      : false;
+
+    if (cantidad <= 0) {
+      throw new Regla(porPeso ? "El peso tiene que ser mayor a cero." : "La cantidad tiene que ser al menos 1.");
+    }
+    // Mil kilos de una sentada, o un millón de unidades. En los dos casos es
+    // más un error de tecleo que una venta.
+    if (cantidad > 1_000_000) {
+      throw new Regla(porPeso ? "Ese peso es demasiado grande." : "Esa cantidad es demasiado grande.");
+    }
     if (precio < 0) throw new Regla("Un precio no puede ser negativo.");
     if (precio > 99_999_999) throw new Regla("Ese precio es demasiado grande.");
 
     return {
-      productoId: recortar(item.productoId as string, 64),
+      productoId,
       nombre,
       unidad: recortar(item.unidadMedida as string, 24) ?? "unidad",
       precio,
+      porPeso,
       cantidad,
     };
   });
@@ -475,7 +496,8 @@ export function vista(d: BaseDatos, caja: Caja) {
       notas: v.notas,
       creadoEn: v.creadoEn,
       renglones: v.items.length,
-      unidades: v.items.reduce((s, i) => s + i.cantidad, 0),
+      unidades: contarRenglones(v.items).unidades,
+      gramos: contarRenglones(v.items).gramos,
     })),
 
     // Los totales por medio salen de los pagos y no de la etiqueta: en una

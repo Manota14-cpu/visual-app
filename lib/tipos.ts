@@ -25,6 +25,8 @@ export interface Producto {
   sku: string | null;
   codigoBarras: string | null;
   unidadMedida: string;
+  /** Se vende por peso: el precio es por kilo y el stock va en gramos. */
+  porPeso: boolean;
   precioCosto: number | null;
   precioVenta: number;
   precioMayorista: number | null;
@@ -53,9 +55,12 @@ export interface ProductoBuscado {
   id: string;
   nombre: string;
   sku: string | null;
+  /** Por kilo si el producto se vende por peso. */
   precio: number;
+  /** En gramos si el producto se vende por peso. */
   stock: number;
   unidadMedida: string;
+  porPeso: boolean;
 }
 
 export interface CambioPrecio {
@@ -105,7 +110,10 @@ export interface ItemPedido {
   productoId: string | null;
   nombre: string;
   unidadMedida: string;
+  /** Por kilo si el renglón es por peso. */
   precio: number;
+  porPeso: boolean;
+  /** En gramos si el renglón es por peso. */
   cantidad: number;
 }
 
@@ -163,6 +171,8 @@ export interface VentaCaja {
   creadoEn: Fecha;
   renglones: number;
   unidades: number;
+  /** Gramos, si la venta tenía productos por peso. */
+  gramos: number;
 }
 
 export interface MovimientoCaja {
@@ -233,7 +243,10 @@ export interface ItemCobro {
   productoId: string | null;
   nombre: string;
   unidadMedida: string;
+  /** Por kilo si es por peso. */
   precio: number;
+  porPeso: boolean;
+  /** En gramos si es por peso. */
   cantidad: number;
   /** Lo que hay en góndola, para no cobrar más de lo que se puede entregar. */
   stock: number;
@@ -309,6 +322,8 @@ export interface Panel {
   stock: {
     productos: number;
     unidades: number;
+    /** Gramos de los productos que se venden por peso. */
+    gramos: number;
     valorCosto: number;
     valorVenta: number;
     bajo: number;
@@ -323,7 +338,7 @@ export interface Panel {
   };
   /** Plata del negocio que está en la calle: lo que deben los clientes. */
   fiado: number;
-  hoyVentas: { cantidad: number; total: number; unidades: number };
+  hoyVentas: { cantidad: number; total: number; unidades: number; gramos: number };
   caja: {
     id: string;
     numero: number;
@@ -363,6 +378,7 @@ export interface Informe {
     costo: number;
     margen: number | null;
     margenCosto: number | null;
+    gramos: number;
     ticketPromedio: number;
   };
   /** Lo que el informe no pudo medir: se vendió sin saber cuánto costaba. */

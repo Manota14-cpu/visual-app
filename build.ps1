@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 #  Arma el paquete de Visual App
 # =====================================================================
 #  Tres pasos: compilar la interfaz de Next a archivos estáticos,
@@ -117,10 +117,22 @@ exit
 
 # --- 6. Lo que se publica -------------------------------------------
 
-# Dos archivos para subir a una publicación de GitHub. Los nombres NO llevan la
+# Tres archivos para subir a una publicación de GitHub. Los nombres NO llevan la
 # versión a propósito: con `releases/latest/download/<archivo>` la dirección es
 # siempre la misma y apunta sola a la última, así que el programa instalado no
 # tiene nada que reconfigurar cuando sale una versión nueva.
+#
+# Son dos paquetes y no uno:
+#
+#   visual-app.zip             medio mega. Es el de la actualización
+#                              automática, que baja sola una vez por día.
+#   visual-app-completo.zip    treinta y pico de megas, porque trae Node
+#                              adentro. Es el que se le pasa a alguien que
+#                              todavía no tiene el programa.
+#
+# El motor no puede ir en el de actualización: pesaría setenta veces más para
+# mandar lo mismo. Y no hace falta, porque el instalador lo deja en la carpeta
+# de datos, que la actualización no toca nunca.
 
 Paso "Armando lo que se publica"
 
@@ -130,6 +142,30 @@ New-Item -ItemType Directory -Path $publicar | Out-Null
 
 $zip = "$publicar\visual-app.zip"
 Compress-Archive -Path "$salida\*" -DestinationPath $zip -Force
+
+# --- El paquete completo, con Node adentro --------------------------
+#
+# Se toma el node.exe de ESTA computadora, que es con el que se probó todo. Va
+# firmado por la OpenJS Foundation, así que Smart App Control lo acepta: es lo
+# que permite repartir el programa sin comprar un certificado.
+
+$nodeAca = (Get-Command node -ErrorAction SilentlyContinue).Source
+if ($nodeAca -and (Test-Path $nodeAca)) {
+    $conNode = "$raiz\dist-completo"
+    if (Test-Path $conNode) { Remove-Item $conNode -Recurse -Force }
+    New-Item -ItemType Directory -Path $conNode | Out-Null
+
+    Copy-Item "$salida\*" $conNode -Recurse -Force
+    Copy-Item $nodeAca "$conNode\node.exe" -Force
+
+    Compress-Archive -Path "$conNode\*" -DestinationPath "$publicar\visual-app-completo.zip" -Force
+    Remove-Item $conNode -Recurse -Force
+
+    $pesoCompleto = [math]::Round((Get-Item "$publicar\visual-app-completo.zip").Length / 1MB, 1)
+    Write-Host "     visual-app-completo.zip  ($pesoCompleto MB, con Node $(& $nodeAca --version))"
+} else {
+    Write-Host "  Sin Node en esta computadora: no se arma el paquete completo." -ForegroundColor Yellow
+}
 
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
 $tamano = (Get-Item $zip).Length
@@ -166,12 +202,13 @@ Write-Host "     servidor\              la API y las reglas"
 Write-Host "     sitio\                 las pantallas"
 Write-Host ""
 Write-Host "  $publicar" -ForegroundColor Cyan
-Write-Host "     visual-app.zip     el paquete que baja la actualización automática"
-Write-Host "     version.json    el aviso que dice que hay una versión nueva"
+Write-Host "     visual-app.zip            lo que baja la actualización automática"
+Write-Host "     visual-app-completo.zip   el que se le pasa a alguien nuevo: trae Node"
+Write-Host "     version.json              el aviso de que hay una versión nueva"
 Write-Host ""
-Write-Host "  Para publicar la versión $version, subí esos dos archivos como"
-Write-Host "  adjuntos de una publicación nueva en GitHub. Las computadoras que"
-Write-Host "  ya tienen Visual App la van a ver dentro de las 24 horas."
+Write-Host "  Para publicar la versión $version, subí los TRES como adjuntos de una"
+Write-Host "  publicación nueva en GitHub. Las computadoras que ya tienen Visual App"
+Write-Host "  la van a ver dentro de las 24 horas."
 if ($Descargas -like "*USUARIO/REPO*") {
     Write-Host ""
     Write-Host "  OJO: la direccion de descarga sigue siendo la de ejemplo." -ForegroundColor Yellow
@@ -180,6 +217,7 @@ if ($Descargas -like "*USUARIO/REPO*") {
 Write-Host ""
 Write-Host "  La carpeta se copia entera a otra computadora con Windows: ahí se"
 Write-Host "  ejecuta el instalador y queda con acceso directo y desinstalador."
-Write-Host "  Solo hace falta que esa computadora tenga Node.js."
+Write-Host "  Esta carpeta NO trae Node: para una computadora que no lo tenga, usá"
+Write-Host "  visual-app-completo.zip, que lo deja instalado junto con el programa."
 Write-Host "  Los datos quedan en %LOCALAPPDATA%\Visual App\datos.json"
 Write-Host ""

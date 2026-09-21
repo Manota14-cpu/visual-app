@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Buscador } from "@/components/ui";
 import { useDatos, useEspera } from "@/lib/datos";
 import { api, consulta } from "@/lib/api";
-import { numero, plata } from "@/lib/formato";
+import { cantidadEscrita, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import type { ProductoBuscado } from "@/lib/tipos";
 
@@ -89,6 +89,7 @@ export function BuscadorProductos({
         precioVenta: number;
         stock: number;
         unidadMedida: string;
+        porPeso: boolean;
       }>(`/productos/codigo/${encodeURIComponent(codigo)}`);
 
       elegir({
@@ -98,6 +99,7 @@ export function BuscadorProductos({
         precio: producto.precioVenta,
         stock: producto.stock,
         unidadMedida: producto.unidadMedida,
+        porPeso: producto.porPeso,
       });
       return true;
     } catch {
@@ -151,10 +153,19 @@ export function BuscadorProductos({
                   <span className="block truncate">{producto.nombre}</span>
                   <span className="block text-chico text-tinta-suave">
                     {producto.sku ? `${producto.sku} · ` : ""}
-                    {producto.stock > 0 ? `${numero(producto.stock)} ${producto.unidadMedida}` : "sin stock"}
+                    {producto.stock > 0
+                      ? producto.porPeso
+                        ? cantidadEscrita(producto.stock, true)
+                        : `${numero(producto.stock)} ${producto.unidadMedida}`
+                      : "sin stock"}
                   </span>
                 </span>
-                <span className="cifra shrink-0 font-medium">{plata(producto.precio)}</span>
+                <span className="shrink-0 text-right">
+                  <span className="cifra block font-medium">{plata(producto.precio)}</span>
+                  {producto.porPeso && (
+                    <span className="block text-chico text-tinta-suave">el kilo</span>
+                  )}
+                </span>
               </button>
             </li>
           ))}

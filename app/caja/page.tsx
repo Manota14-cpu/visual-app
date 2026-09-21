@@ -18,7 +18,16 @@ import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
 import { api, ErrorApi } from "@/lib/api";
-import { fechaHora, hora, leerNumero, numero, plata } from "@/lib/formato";
+import {
+  cantidadEscrita,
+  fechaHora,
+  hora,
+  importeRenglon,
+  leerNumero,
+  llevado,
+  numero,
+  plata,
+} from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type Caja, type CajaResumen, type ItemCobro } from "@/lib/tipos";
 import { BuscadorProductos } from "./buscador-productos";
@@ -49,7 +58,10 @@ export default function PaginaCaja() {
     deudaCliente: number;
   } | null>(null);
 
-  const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
+  const total = items.reduce(
+    (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
+    0
+  );
 
   // No se puede entregar lo que no hay: el backend lo rechaza igual, pero el
   // renglón en rojo y el botón apagado lo dicen antes de confirmar la venta.
@@ -66,12 +78,18 @@ export default function PaginaCaja() {
     precio: number;
     stock: number;
     unidadMedida: string;
+    porPeso: boolean;
   }) {
+    // Un producto por peso arranca en un kilo y otro en una unidad. Es lo que
+    // hace que agregarlo de nuevo sume "otro kilo" y no "otro gramo", que sería
+    // inútil; y un kilo es el número que más veces hay que corregir menos.
+    const paso = producto.porPeso ? 1000 : 1;
+
     setItems((previos) => {
       const existente = previos.find((i) => i.productoId === producto.id);
       if (existente) {
         return previos.map((i) =>
-          i.productoId === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i
+          i.productoId === producto.id ? { ...i, cantidad: i.cantidad + paso } : i
         );
       }
       return [
@@ -81,7 +99,8 @@ export default function PaginaCaja() {
           nombre: producto.nombre,
           unidadMedida: producto.unidadMedida,
           precio: producto.precio,
-          cantidad: 1,
+          porPeso: producto.porPeso,
+          cantidad: paso,
           stock: producto.stock,
         },
       ];
@@ -182,7 +201,9 @@ export default function PaginaCaja() {
                           <span className="min-w-0 flex-1">
                             <span className="block truncate">{item.nombre}</span>
                             <span className="block text-chico text-tinta-suave">
-                              {plata(item.precio)} · quedan {numero(item.stock)}
+                              {plata(item.precio)}
+                              {item.porPeso ? " el kilo" : ""} · quedan{" "}
+                              {cantidadEscrita(item.stock, item.porPeso)}
                             </span>
                           </span>
 
@@ -203,10 +224,19 @@ export default function PaginaCaja() {
                             >
                               <Icono nombre="menos" tamano={14} />
                             </button>
+                            {/* En gramos si es por peso: es lo que muestra la
+                                balanza, así se teclea lo que se lee sin
+                                convertir nada. El campo es más ancho porque
+                                "1250" no entra donde entraba "2". */}
                             <input
-                              className="w-12 border-x border-linea-fuerte py-1.5 text-center text-base tabular-nums focus:outline-none"
+                              className={cn(
+                                "border-x border-linea-fuerte py-1.5 text-center text-base tabular-nums focus:outline-none",
+                                item.porPeso ? "w-16" : "w-12"
+                              )}
                               inputMode="numeric"
-                              aria-label={`Cantidad de ${item.nombre}`}
+                              aria-label={
+                                item.porPeso ? `Gramos de ${item.nombre}` : `Cantidad de ${item.nombre}`
+                              }
                               value={item.cantidad}
                               onChange={(e) =>
                                 setItems((previos) =>
@@ -220,12 +250,14 @@ export default function PaginaCaja() {
                             />
                             <button
                               type="button"
-                              aria-label="Uno más"
+                              aria-label={item.porPeso ? "Cien gramos más" : "Uno más"}
                               className="px-2 py-1.5 text-tinta-suave hover:text-tinta"
                               onClick={() =>
                                 setItems((previos) =>
                                   previos.map((i, x) =>
-                                    x === indice ? { ...i, cantidad: i.cantidad + 1 } : i
+                                    x === indice
+                                      ? { ...i, cantidad: i.cantidad + (i.porPeso ? 100 : 1) }
+                                      : i
                                   )
                                 )
                               }
@@ -240,7 +272,7 @@ export default function PaginaCaja() {
                               excede && "text-alerta-texto"
                             )}
                           >
-                            {plata(item.precio * item.cantidad)}
+                            {plata(importeRenglon(item.precio, item.cantidad, item.porPeso))}
                           </span>
 
                           <button
@@ -326,7 +358,7 @@ export default function PaginaCaja() {
                         </Link>
                         <span className="block text-chico text-tinta-suave">
                           {hora(venta.creadoEn)} · {ETIQUETA_PAGO[venta.metodoPago] ?? venta.metodoPago} ·{" "}
-                          {numero(venta.unidades)} u.
+                          {llevado(venta.unidades, venta.gramos, true)}
                         </span>
                       </span>
                       <span

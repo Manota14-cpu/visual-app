@@ -6,7 +6,7 @@ import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { fechaHora, numero, plata } from "@/lib/formato";
+import { cantidadEscrita, fechaHora, importeRenglon, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type EstadoPedido, type ItemPedido, type Pedido } from "@/lib/tipos";
 import { BuscadorProductos } from "@/app/caja/buscador-productos";
@@ -53,7 +53,10 @@ export function DialogoVenta({
   // pasaba a sumar al cajón en vez de restar. El backend ahora la rechaza; el
   // botón apagado lo dice antes de que alguien escriba nada.
   const esDevolucion = pedido.canal === "devolucion";
-  const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
+  const total = items.reduce(
+    (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
+    0
+  );
 
   async function cambiarEstado(estado: EstadoPedido) {
     if (!pedido) return;
@@ -201,10 +204,12 @@ export function DialogoVenta({
               placeholder="Agregar producto"
               onElegir={(producto) =>
                 setItems((previos) => {
+                  // Un kilo si se vende por peso: la cantidad va en gramos.
+                  const paso = producto.porPeso ? 1000 : 1;
                   const existente = previos.find((i) => i.productoId === producto.id);
                   if (existente) {
                     return previos.map((i) =>
-                      i.productoId === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i
+                      i.productoId === producto.id ? { ...i, cantidad: i.cantidad + paso } : i
                     );
                   }
                   return [
@@ -215,7 +220,8 @@ export function DialogoVenta({
                       nombre: producto.nombre,
                       unidadMedida: producto.unidadMedida,
                       precio: producto.precio,
-                      cantidad: 1,
+                      porPeso: producto.porPeso,
+                      cantidad: paso,
                     },
                   ];
                 })
@@ -281,11 +287,12 @@ export function DialogoVenta({
                   <span className="min-w-0">
                     <span className="block truncate">{item.nombre}</span>
                     <span className="block text-chico text-tinta-suave">
-                      {numero(item.cantidad)} × {plata(item.precio)} · {item.unidadMedida}
+                      {cantidadEscrita(item.cantidad, item.porPeso)} × {plata(item.precio)}
+                      {item.porPeso ? " el kilo" : ` · ${item.unidadMedida}`}
                     </span>
                   </span>
                   <span className="cifra shrink-0 font-medium">
-                    {plata(item.precio * item.cantidad)}
+                    {plata(importeRenglon(item.precio, item.cantidad, item.porPeso))}
                   </span>
                 </li>
               ))}

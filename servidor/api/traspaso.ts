@@ -127,6 +127,7 @@ export function rutasTraspaso(r: Ruteador, a: Almacen): void {
             sku: null,
             codigoBarras: null,
             unidadMedida: "unidad",
+            porPeso: false,
             precioCosto: null,
             precioVenta: 0,
             precioMayorista: null,

@@ -6,7 +6,7 @@ import { Boton, Campo, Cargando, Dialogo, Etiqueta, Hoja } from "@/components/ui
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
 import { api, ErrorApi } from "@/lib/api";
-import { fechaHora, numero, peso } from "@/lib/formato";
+import { fechaHora, numero, tamano } from "@/lib/formato";
 import type { Actualizacion, Sistema } from "@/lib/tipos";
 
 /**
@@ -133,7 +133,7 @@ export default function PaginaConfiguracion() {
 
           <Hoja
             titulo="Archivo de datos"
-            accion={<Etiqueta tono="dato">{peso(datos.tamano)}</Etiqueta>}
+            accion={<Etiqueta tono="dato">{tamano(datos.tamano)}</Etiqueta>}
           >
             <div className="flex flex-col gap-4">
               <div>
@@ -189,7 +189,7 @@ export default function PaginaConfiguracion() {
                       <span className="min-w-0">
                         <span className="block truncate font-mono text-chico">{copia.nombre}</span>
                         <span className="block text-chico text-tinta-suave">
-                          {fechaHora(copia.fecha)} · {peso(copia.tamano)}
+                          {fechaHora(copia.fecha)} · {tamano(copia.tamano)}
                         </span>
                       </span>
                       <Boton
@@ -484,7 +484,7 @@ function Actualizaciones() {
           <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo p-3">
             <p className="text-base">
               Está disponible la versión <strong>{datos.ultima.version}</strong>
-              {datos.ultima.tamano ? ` (${peso(datos.ultima.tamano)})` : ""}. Tenés la{" "}
+              {datos.ultima.tamano ? ` (${tamano(datos.ultima.tamano)})` : ""}. Tenés la{" "}
               {datos.instalada}.
             </p>
             {datos.ultima.notas && (

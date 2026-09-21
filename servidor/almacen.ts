@@ -305,6 +305,15 @@ export class Almacen {
  */
 function normalizar(d: BaseDatos): BaseDatos {
   d.cobrosFiado ??= [];
+
+  // Antes no existía la venta por peso: todo lo cargado hasta ahora es por
+  // unidad. Se escribe explícito en vez de dejarlo indefinido, para que el
+  // resto del programa no tenga que preguntarse si el campo está.
+  for (const p of d.productos) p.porPeso ??= false;
+  for (const pedido of d.pedidos) {
+    for (const item of pedido.items) item.porPeso ??= false;
+  }
+
   return d;
 }
 

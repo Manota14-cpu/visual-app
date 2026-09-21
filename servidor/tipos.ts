@@ -70,6 +70,13 @@ export interface Producto {
   /** Describe el envase: unidad, x50u, caja, kg. */
   unidadMedida: string;
   /**
+   * Se vende por peso: el precio es por kilo y el stock va en gramos.
+   *
+   * Es del producto y no del renglón porque es una decisión del catálogo: el
+   * pan se vende por peso siempre, no a veces.
+   */
+  porPeso: boolean;
+  /**
    * Nulo significa "todavía no se sabe", no "vale cero". La diferencia importa:
    * con costo cero el margen daría 100% y el valor del inventario mentiría sin
    * que nada avise.
@@ -153,7 +160,15 @@ export interface ItemPedido {
    * actual, y lo dice.
    */
   costo: number | null;
-  /** Negativa en una devolución. */
+  /**
+   * Copiado del producto, igual que el nombre y el costo.
+   *
+   * Sin esto, pasar un producto de "por unidad" a "por peso" reescribiría el
+   * importe de todas sus ventas pasadas: lo cobrado hace tres meses pasaría a
+   * valer mil veces menos.
+   */
+  porPeso: boolean;
+  /** En gramos si el renglón es por peso. Negativa en una devolución. */
   cantidad: number;
 }
 

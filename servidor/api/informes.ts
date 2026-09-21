@@ -5,7 +5,9 @@ import {
   cuentaEnResultado,
   deudaTotal,
   entero,
+  contarRenglones,
   etiquetaGasto,
+  importeRenglon,
   margenSobreCosto,
   margenSobreVenta,
 } from "../reglas.ts";
@@ -51,8 +53,14 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
       const costoDe = (item: { productoId: string | null; costo?: number | null }) =>
         item.costo ?? d.productos.find((p) => p.id === item.productoId)?.precioCosto ?? 0;
 
-      const ingreso = renglones.reduce((s, i) => s + i.precio * i.cantidad, 0);
-      const costo = renglones.reduce((s, i) => s + costoDe(i) * i.cantidad, 0);
+      const ingreso = renglones.reduce(
+        (s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso),
+        0
+      );
+      const costo = renglones.reduce(
+        (s, i) => s + importeRenglon(costoDe(i), i.cantidad, i.porPeso),
+        0
+      );
 
       // 1 - Cuantas unidades se vendieron sin ningun costo con que compararlas.
       //
@@ -67,7 +75,7 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
 
       const ingresoSinCosto = renglones
         .filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
-        .reduce((s, i) => s + i.precio * i.cantidad, 0);
+        .reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
 
       // El costo se acumula renglon por renglon, con el que cada uno guardo el
       // dia de su venta. Multiplicar el costo de hoy por el total de unidades
@@ -86,8 +94,8 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
         };
 
         actual.unidades += item.cantidad;
-        actual.ingreso += item.precio * item.cantidad;
-        actual.costo += costoDe(item) * item.cantidad;
+        actual.ingreso += importeRenglon(item.precio, item.cantidad, item.porPeso);
+        actual.costo += importeRenglon(costoDe(item), item.cantidad, item.porPeso);
         porProducto.set(clave, actual);
       }
 
@@ -132,7 +140,7 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
             categoria: d.categorias.find((c) => c.id === p.categoriaId)?.nombre ?? null,
             stock: p.stock,
             unidadMedida: p.unidadMedida,
-            capital: p.stock * (p.precioCosto ?? 0),
+            capital: importeRenglon(p.precioCosto ?? 0, p.stock, p.porPeso),
             diasQuieto: ultimo
               ? Math.floor((Date.now() - new Date(ultimo.creadoEn).getTime()) / 86_400_000)
               : null,
@@ -177,7 +185,8 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
 
         ventas: {
           pedidos: ventas.length,
-          unidades: renglones.reduce((s, i) => s + i.cantidad, 0),
+          unidades: contarRenglones(renglones).unidades,
+          gramos: contarRenglones(renglones).gramos,
           ingreso,
           costo,
           margen: margenSobreVenta(ingreso, costo),

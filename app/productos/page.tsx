@@ -20,7 +20,7 @@ import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { useDatos, useEspera } from "@/lib/datos";
 import { api, consulta, ErrorApi } from "@/lib/api";
-import { numero, plata, porcentaje } from "@/lib/formato";
+import { cantidadEscrita, numero, plata, porcentaje } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import type { Categoria, PaginaProductos, Producto } from "@/lib/tipos";
 import { DialogoProducto } from "./dialogo-producto";
@@ -334,11 +334,11 @@ function Catalogo() {
                               !sinStock && bajo && "text-aviso-texto"
                             )}
                           >
-                            {numero(producto.stock)}
+                            {cantidadEscrita(producto.stock, producto.porPeso)}
                           </span>
                           {producto.stockMinimo > 0 && (
                             <span className="block text-chico text-tinta-suave">
-                              mín. {numero(producto.stockMinimo)}
+                              mín. {cantidadEscrita(producto.stockMinimo, producto.porPeso)}
                             </span>
                           )}
                         </td>
@@ -347,7 +347,12 @@ function Catalogo() {
                           {producto.precioCosto ? plata(producto.precioCosto) : "—"}
                         </td>
 
-                        <td className="cifra text-right font-medium">{plata(producto.precioVenta)}</td>
+                        <td className="text-right">
+                          <span className="cifra block font-medium">{plata(producto.precioVenta)}</span>
+                          {producto.porPeso && (
+                            <span className="block text-chico text-tinta-tenue">el kilo</span>
+                          )}
+                        </td>
 
                         <td className="text-right">
                           <span className="cifra block text-tinta-suave">

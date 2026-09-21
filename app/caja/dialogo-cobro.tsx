@@ -6,7 +6,7 @@ import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, consulta, ErrorApi } from "@/lib/api";
 import { useDatos, useEspera } from "@/lib/datos";
-import { leerNumero, numero, plata } from "@/lib/formato";
+import { importeRenglon, leerNumero, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, MEDIOS_PAGO, type ItemCobro, type MedioPago } from "@/lib/tipos";
 
@@ -46,7 +46,10 @@ export function DialogoCobro({
   }) => void;
 }) {
   const avisos = useAvisos();
-  const total = items.reduce((suma, item) => suma + item.precio * item.cantidad, 0);
+  const total = items.reduce(
+    (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
+    0
+  );
 
   const [tramos, setTramos] = useState<Tramo[]>([{ metodo: "efectivo", monto: String(total) }]);
   const [recibido, setRecibido] = useState("");

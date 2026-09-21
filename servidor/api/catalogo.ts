@@ -184,6 +184,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
           precio: p.precioVenta,
           stock: p.stock,
           unidadMedida: p.unidadMedida,
+          porPeso: p.porPeso,
         }));
     })
   );
@@ -243,6 +244,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         sku: null,
         codigoBarras: null,
         unidadMedida: "unidad",
+        porPeso: false,
         precioCosto: null,
         precioVenta: 0,
         precioMayorista: null,
@@ -542,6 +544,7 @@ export function vista(d: BaseDatos, p: Producto) {
     sku: p.sku,
     codigoBarras: p.codigoBarras,
     unidadMedida: p.unidadMedida,
+    porPeso: p.porPeso,
     precioCosto: p.precioCosto,
     precioVenta: p.precioVenta,
     precioMayorista: p.precioMayorista,
@@ -571,6 +574,12 @@ export function aplicarFormulario(d: BaseDatos, producto: Producto, cuerpo: Reco
   );
   producto.descripcion = recortar(cuerpo.descripcion as string, 600);
   producto.unidadMedida = recortar(cuerpo.unidadMedida as string, 24) ?? "unidad";
+
+  // Se vende por peso: el precio pasa a ser por kilo y el stock a contarse en
+  // gramos. Cambiar esto en un producto que ya tiene ventas no las toca —cada
+  // renglón guardó su propia marca— pero sí cambia lo que significa su stock,
+  // así que es una decisión para tomar al cargarlo, no después.
+  producto.porPeso = cuerpo.porPeso === true;
 
   const sku = recortar(cuerpo.sku as string, 40);
   if (sku && d.productos.some((p) => p.id !== producto.id && p.sku?.toLowerCase() === sku.toLowerCase())) {

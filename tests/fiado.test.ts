@@ -44,6 +44,7 @@ function sembrarProducto(precio: number, stock = 100): string {
       sku: null,
       codigoBarras: null,
       unidadMedida: "unidad",
+      porPeso: false,
       precioCosto: Math.round(precio / 2),
       precioVenta: precio,
       precioMayorista: null,

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { BarrasEtiquetadas } from "@/components/grafico";
 import { useDatos } from "@/lib/datos";
-import { numero, plata, porcentaje } from "@/lib/formato";
+import { llevado, numero, plata, porcentaje } from "@/lib/formato";
 import type { Informe } from "@/lib/tipos";
 
 const PERIODOS = [
@@ -56,7 +56,7 @@ export default function PaginaInformes() {
             <Metrica
               rotulo="Vendido"
               valor={plata(datos.ventas.ingreso)}
-              pie={`${numero(datos.ventas.pedidos)} ventas · ${numero(datos.ventas.unidades)} unidades`}
+              pie={`${numero(datos.ventas.pedidos)} ventas · ${llevado(datos.ventas.unidades, datos.ventas.gramos)}`}
             />
             <Metrica
               rotulo="Costó"

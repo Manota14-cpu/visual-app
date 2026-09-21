@@ -7,7 +7,7 @@ import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../regl
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
 import { latir } from "../vida.ts";
 
-export const VERSION = "1.5.0";
+export const VERSION = "1.6.0";
 
 /**
  * El archivo de datos y lo que se puede hacer con él.
@@ -196,6 +196,7 @@ function armarEjemplo(): BaseDatos {
       sku,
       codigoBarras: null,
       unidadMedida: unidad,
+      porPeso: false,
       precioCosto: costo,
       precioVenta: venta,
       precioMayorista: null,
@@ -321,6 +322,7 @@ function vender(
       unidadMedida: producto.unidadMedida,
       precio: producto.precioVenta,
       costo: producto.precioCosto,
+      porPeso: producto.porPeso,
       cantidad,
     });
 

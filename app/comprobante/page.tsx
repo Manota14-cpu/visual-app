@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Boton, Cargando, Vacio } from "@/components/ui";
 import { useDatos, useLatido } from "@/lib/datos";
-import { fechaHora, numero, plata } from "@/lib/formato";
+import { cantidadEscrita, fechaHora, importeRenglon, numero, plata } from "@/lib/formato";
 import { ETIQUETA_PAGO, type Pedido, type Sistema } from "@/lib/tipos";
 
 export default function PaginaComprobante() {
@@ -87,11 +87,13 @@ function Comprobante() {
                   <td className="py-1.5">
                     <span className="block">{item.nombre}</span>
                     <span className="block text-chico text-tinta-suave">
-                      {numero(item.cantidad)} {item.unidadMedida} × {plata(item.precio)}
+                      {item.porPeso
+                        ? `${cantidadEscrita(item.cantidad, true)} × ${plata(item.precio)} el kilo`
+                        : `${numero(item.cantidad)} ${item.unidadMedida} × ${plata(item.precio)}`}
                     </span>
                   </td>
                   <td className="cifra py-1.5 text-right align-top">
-                    {plata(item.precio * item.cantidad)}
+                    {plata(importeRenglon(item.precio, item.cantidad, item.porPeso))}
                   </td>
                 </tr>
               ))}

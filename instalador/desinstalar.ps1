@@ -71,6 +71,12 @@ function Desinstalar {
 
     if (Test-Path $clave) { Remove-Item $clave -Recurse -Force -ErrorAction SilentlyContinue }
 
+    # El motor que trajo el instalador sí se borra: son 88 MB que no le sirven
+    # a nadie sin el programa. Los DATOS del negocio no se tocan — esos son del
+    # negocio, no del programa, y por eso están en otra carpeta.
+    $runtime = Join-Path $datos "runtime"
+    if (Test-Path $runtime) { Remove-Item $runtime -Recurse -Force -ErrorAction SilentlyContinue }
+
     # Este mismo archivo vive adentro de la carpeta que hay que borrar, así que
     # no puede borrarla él: se le encarga a una ventana aparte que espera a que
     # este proceso termine.
@@ -163,7 +169,7 @@ $cuerpo.Size = New-Object System.Drawing.Size(520, 178)
 $ventana.Controls.Add($cuerpo)
 
 $cuerpo.Controls.Add((Texto "¿Desinstalar Visual App?" 32 34 460 30 $Tinta (Letra 14)))
-$cuerpo.Controls.Add((Texto ("Se saca el programa, sus accesos directos y la anotación en Windows.") 32 72 456 24 $Suave $null))
+$cuerpo.Controls.Add((Texto ("Se saca el programa, su motor, sus accesos directos y la anotación en Windows.") 32 72 456 24 $Suave $null))
 $cuerpo.Controls.Add((Texto ("Tus datos NO se borran: el catálogo, las ventas y los turnos quedan en " +
     "$datos. Si no los querés más, borrá esa carpeta a mano.") 32 100 456 60 $Suave (Letra 9)))
 

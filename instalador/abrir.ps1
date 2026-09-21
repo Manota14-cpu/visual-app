@@ -39,17 +39,31 @@ function Cartel($mensaje) {
 
 # --- Node -----------------------------------------------------------
 
+# El motor que trae el instalador va primero.
+#
+# Vive al lado de los datos y no adentro del programa a propósito: la
+# actualización reemplaza la carpeta del programa ENTERA, así que cualquier
+# cosa guardada ahí desaparece en la primera actualización. En la carpeta de
+# datos, que no se toca nunca, sobrevive por cómo están hechas las cosas y no
+# porque alguien se acuerde de copiarlo.
 $node = $null
-$enPath = Get-Command node -ErrorAction SilentlyContinue
-if ($enPath) {
-    $node = $enPath.Source
+$propio = Join-Path $env:LOCALAPPDATA "Visual App\runtime\node.exe"
+
+if (Test-Path $propio) {
+    $node = $propio
 } else {
-    foreach ($ruta in @(
-        "$env:ProgramFiles\nodejs\node.exe",
-        "${env:ProgramFiles(x86)}\nodejs\node.exe",
-        "$env:LOCALAPPDATA\Programs\nodejs\node.exe"
-    )) {
-        if (Test-Path $ruta) { $node = $ruta; break }
+    # Si no vino con el programa, sirve cualquier Node de la computadora.
+    $enPath = Get-Command node -ErrorAction SilentlyContinue
+    if ($enPath) {
+        $node = $enPath.Source
+    } else {
+        foreach ($ruta in @(
+            "$env:ProgramFiles\nodejs\node.exe",
+            "${env:ProgramFiles(x86)}\nodejs\node.exe",
+            "$env:LOCALAPPDATA\Programs\nodejs\node.exe"
+        )) {
+            if (Test-Path $ruta) { $node = $ruta; break }
+        }
     }
 }
 

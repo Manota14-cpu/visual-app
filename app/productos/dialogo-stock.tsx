@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Boton, Campo, Dialogo } from "@/components/ui";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { leerNumero, numero } from "@/lib/formato";
+import { cantidadEscrita, leerNumero, numero } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import type { Producto } from "@/lib/tipos";
 
@@ -69,7 +69,13 @@ export function DialogoStock({
       abierto={producto !== null}
       onCerrar={onCerrar}
       titulo="Ajustar stock"
-      descripcion={producto ? `${producto.nombre} · hay ${numero(producto.stock)} ${producto.unidadMedida}` : ""}
+      descripcion={
+        producto
+          ? producto.porPeso
+            ? `${producto.nombre} · hay ${cantidadEscrita(producto.stock, true)}`
+            : `${producto.nombre} · hay ${numero(producto.stock)} ${producto.unidadMedida}`
+          : ""
+      }
       ancho="max-w-md"
       pie={
         <>
@@ -106,17 +112,25 @@ export function DialogoStock({
         </div>
 
         <Campo
-          etiqueta="Cantidad"
+          etiqueta={producto?.porPeso ? "Gramos" : "Cantidad"}
           inputMode="numeric"
           autoFocus
           placeholder="0"
           value={cantidad}
           onChange={(e) => setCantidad(e.target.value)}
-          error={insuficiente ? `No alcanza: hay ${numero(producto?.stock ?? 0)}.` : null}
+          error={
+            insuficiente
+              ? `No alcanza: hay ${cantidadEscrita(producto?.stock ?? 0, producto?.porPeso)}.`
+              : null
+          }
           ayuda={
             cuantos > 0 && !insuficiente
-              ? `Queda en ${numero(resultante)} ${producto?.unidadMedida ?? ""}`
-              : undefined
+              ? producto?.porPeso
+                ? `Queda en ${cantidadEscrita(resultante, true)}`
+                : `Queda en ${numero(resultante)} ${producto?.unidadMedida ?? ""}`
+              : producto?.porPeso
+                ? "Se carga en gramos: un kilo son 1000"
+                : undefined
           }
         />
 

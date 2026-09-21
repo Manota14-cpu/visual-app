@@ -86,7 +86,8 @@ export function dia(iso: string): string {
 
 const TAMANOS = ["B", "KB", "MB", "GB"];
 
-export function peso(bytes: number): string {
+/** El tamaño de un archivo. Se llamaba `peso`, que ahora es el de la balanza. */
+export function tamano(bytes: number): string {
   let valor = bytes;
   let i = 0;
   while (valor >= 1024 && i < TAMANOS.length - 1) {
@@ -159,4 +160,55 @@ export function margenSobreCosto(
 ): number | null {
   if (!precioVenta || precioVenta <= 0 || !precioCosto || precioCosto <= 0) return null;
   return Math.round(((precioVenta - precioCosto) / precioCosto) * 100);
+}
+
+/**
+ * Lo que sale un renglón. El mismo cálculo que hace el servidor.
+ *
+ * Para un producto por peso el precio es por kilo y la cantidad va en gramos.
+ * Escrito dos veces porque las pantallas no comparten código con el servidor, y
+ * cubierto por una prueba que compara las dos copias: un renglón que la pantalla
+ * muestra a $500 y el servidor cobra a $500.000 sería el peor error posible.
+ */
+export function importeRenglon(precio: number, cantidad: number, porPeso?: boolean): number {
+  if (!porPeso) return precio * cantidad;
+  return Math.round((precio * cantidad) / 1000);
+}
+
+/**
+ * Un peso en gramos, escrito como lo diría alguien.
+ *
+ * Hasta el kilo se habla en gramos —"500 g"— y de ahí para arriba en kilos con
+ * coma, que es como está escrito el cartel del mostrador.
+ */
+export function peso(gramos: number): string {
+  const signo = gramos < 0 ? "-" : "";
+  const g = Math.abs(gramos);
+
+  if (g < 1000) return `${signo}${g} g`;
+
+  const kilos = g / 1000;
+  // Sin decimales de relleno: 2 kg y no 2,000 kg.
+  const texto = kilos.toLocaleString("es-AR", { maximumFractionDigits: 3 });
+  return `${signo}${texto} kg`;
+}
+
+/** Cuánto se lleva: unidades o peso, según el producto. */
+export function cantidadEscrita(cantidad: number, porPeso?: boolean): string {
+  return porPeso ? peso(cantidad) : numero(cantidad);
+}
+
+/**
+ * Lo que se llevó, en las unidades que corresponda.
+ *
+ * Unidades y peso van separados y nunca sumados: media docena de facturas más
+ * medio kilo de pan no son "506 unidades". Cuando hay de los dos se escriben
+ * los dos, y cuando hay de uno solo no se nombra el otro.
+ */
+export function llevado(unidades: number, gramos: number, corto = false): string {
+  const partes: string[] = [];
+  if (unidades > 0) partes.push(corto ? `${numero(unidades)} u.` : `${numero(unidades)} unidades`);
+  if (gramos > 0) partes.push(peso(gramos));
+  if (partes.length === 0) return corto ? "0 u." : "0 unidades";
+  return partes.join(" · ");
 }

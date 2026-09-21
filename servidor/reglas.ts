@@ -133,6 +133,60 @@ export function margenSobreCosto(
 
 // ──────────────────────────────────  Caja  ──────────────────────────────────
 
+/**
+ * Los productos que se venden por peso.
+ *
+ * Una panadería no vende "un pan": vende medio kilo. Para esos productos el
+ * precio es POR KILO y la cantidad va en GRAMOS — el stock, el mínimo y cada
+ * renglón de una venta.
+ *
+ * Gramos y no kilos con coma, a propósito. Toda la aplicación trabaja con
+ * enteros: la plata en pesos enteros, el stock en unidades enteras. Meter
+ * decimales acá obligaría a arrastrar redondeos por el stock, los informes y el
+ * arqueo, que es justo donde un centavo perdido se vuelve una diferencia de
+ * caja que nadie puede explicar. Un gramo es una unidad chica y entera, y la
+ * balanza del mostrador ya muestra gramos.
+ */
+export const GRAMOS_POR_KILO = 1000;
+
+/**
+ * Lo que sale un renglón.
+ *
+ * Es la única fórmula que convierte cantidad en plata, y la usan el cobro, la
+ * edición de una venta, los informes y el comprobante. Escrita una sola vez: un
+ * producto que se cobra bien en la caja y mal en el informe es peor que uno que
+ * se cobra mal en las dos.
+ */
+export function importeRenglon(precio: number, cantidad: number, porPeso?: boolean): number {
+  if (!porPeso) return precio * cantidad;
+
+  // El redondeo va acá y no al final de la suma: lo que se cobra tiene que ser
+  // la suma de lo que dice cada renglón. Redondeando el total, el comprobante
+  // mostraría renglones que no suman lo que se pagó.
+  return Math.round((precio * cantidad) / GRAMOS_POR_KILO);
+}
+
+/**
+ * Cuántas unidades y cuántos gramos hay en un conjunto de renglones.
+ *
+ * Van separados y no sumados en un solo número. Media docena de facturas más
+ * medio kilo de pan no son "506 unidades": mezclarlos daría un número que no
+ * significa nada, y encima parecería un error de la aplicación.
+ */
+export function contarRenglones(
+  renglones: { porPeso?: boolean; cantidad: number }[]
+): { unidades: number; gramos: number } {
+  let unidades = 0;
+  let gramos = 0;
+
+  for (const r of renglones) {
+    if (r.porPeso) gramos += r.cantidad;
+    else unidades += r.cantidad;
+  }
+
+  return { unidades, gramos };
+}
+
 export function cajaAbierta(d: BaseDatos): Caja | undefined {
   return d.cajas.find((c) => c.estado === "abierta");
 }

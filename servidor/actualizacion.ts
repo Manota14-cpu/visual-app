@@ -192,7 +192,13 @@ async function bajar(aviso: Aviso): Promise<string> {
   const carpeta = path.join(carpetaDatos, "actualizaciones");
   fs.mkdirSync(carpeta, { recursive: true });
 
-  const respuesta = await fetch(aviso.archivo, { signal: AbortSignal.timeout(180_000) });
+  // Diez minutos, no tres. El paquete de actualización pesa medio mega, pero
+  // el completo pasa los treinta, y tres minutos para treinta megas exigen
+  // metrónomo: un megabit y medio sostenido. En un pueblo con internet flojo
+  // eso se corta justo cuando casi terminaba, y el usuario ve un error en vez
+  // de una actualización. Esperar de más no le cuesta nada a nadie: esto corre
+  // en segundo plano.
+  const respuesta = await fetch(aviso.archivo, { signal: AbortSignal.timeout(600_000) });
   if (!respuesta.ok) throw new Regla(`No se pudo bajar la actualización (${respuesta.status}).`);
 
   const datos = Buffer.from(await respuesta.arrayBuffer());

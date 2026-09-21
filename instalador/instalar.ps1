@@ -121,7 +121,21 @@ function PuedeEscribir($ruta) {
 
 # ─────────────────────────────  La instalación  ─────────────────────────────
 
+<#
+    Dónde va el motor que trae el paquete.
+
+    Al lado de los datos y no adentro del programa: la actualización reemplaza
+    la carpeta del programa ENTERA —arma una nueva con lo que vino en el
+    paquete y la intercambia— así que cualquier cosa guardada ahí desaparece
+    en la primera actualización. En la carpeta de datos, que no se toca nunca,
+    sobrevive por cómo están hechas las cosas y no porque alguien se acuerde.
+#>
+$runtime = Join-Path $datos "runtime"
+$nodePropio = Join-Path $runtime "node.exe"
+
 function BuscarNode {
+    if (Test-Path $nodePropio) { return $nodePropio }
+
     $encontrado = Get-Command node -ErrorAction SilentlyContinue
     if ($encontrado) { return $encontrado.Source }
 
@@ -134,6 +148,29 @@ function BuscarNode {
     }
 
     return $null
+}
+
+<#
+    Deja el motor del paquete en la carpeta de datos, si el paquete lo trae.
+
+    Se copia a un temporal y recién ahí se reemplaza, por lo mismo que el
+    programa: un archivo de 88 MB copiado a medias sobre el que funcionaba deja
+    la aplicación sin poder abrir. Y no se pisa uno igual: comparar el tamaño
+    evita 88 MB de escritura en cada reinstalación.
+#>
+function InstalarNodePropio {
+    $delPaquete = Join-Path $origen "node.exe"
+    if (-not (Test-Path $delPaquete)) { return }
+
+    if ((Test-Path $nodePropio) -and
+        ((Get-Item $nodePropio).Length -eq (Get-Item $delPaquete).Length)) {
+        return
+    }
+
+    New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+    $temporal = "$nodePropio.nuevo"
+    Copy-Item $delPaquete $temporal -Force
+    Move-Item $temporal $nodePropio -Force
 }
 
 function CerrarLoAbierto {
@@ -387,6 +424,10 @@ function AbrirVisualApp {
 
 if ($Silencioso) {
     if ((LoQueFalta).Count -gt 0) { exit 2 }
+
+    # Antes de buscarlo, dejar el que vino en el paquete.
+    try { InstalarNodePropio } catch { }
+
     if (-not (BuscarNode)) { exit 1 }
 
     # Sin ventana no hay a quién avisarle, así que se comprueba igual y se sale
@@ -591,6 +632,7 @@ function Texto($contenido, $x, $y, $ancho, $alto, $color, $fuente) {
 
 # ── Paso 1: bienvenida ──────────────────────────────────────────────
 
+try { InstalarNodePropio } catch { }
 $node = BuscarNode
 
 <#

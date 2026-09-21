@@ -1,6 +1,14 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
-import { ajustarStock, contiene, entero, normalizar, recortar, recortarObligatorio } from "../reglas.ts";
+import {
+  ajustarStock,
+  contiene,
+  entero,
+  importeRenglon,
+  normalizar,
+  recortar,
+  recortarObligatorio,
+} from "../reglas.ts";
 import { ESTADOS_PEDIDO, type BaseDatos, type EstadoPedido, type ItemPedido, type Pedido } from "../tipos.ts";
 import { paginar } from "./catalogo.ts";
 
@@ -163,6 +171,10 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
               d.productos.find((p) => p.id === productoId)?.precioCosto ??
               null)
             : null,
+          // Del catálogo, no del pedido: es una decisión del producto.
+          porPeso: productoId
+            ? (d.productos.find((p) => p.id === productoId)?.porPeso ?? false)
+            : false,
           cantidad,
         };
       });
@@ -190,7 +202,7 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       }
 
       pedido.items = nuevos;
-      pedido.total = nuevos.reduce((s, i) => s + i.precio * i.cantidad, 0);
+      pedido.total = nuevos.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
       pedido.nombre = recortar(cuerpo.nombre as string, 160) ?? pedido.nombre;
       pedido.notas = recortar(cuerpo.notas as string, 1000);
 

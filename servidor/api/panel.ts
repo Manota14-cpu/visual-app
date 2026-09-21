@@ -1,6 +1,13 @@
 import type { Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
-import { cajaAbierta, deudaTotal, esperadoEn, ventasDe } from "../reglas.ts";
+import {
+  cajaAbierta,
+  contarRenglones,
+  deudaTotal,
+  esperadoEn,
+  importeRenglon,
+  ventasDe,
+} from "../reglas.ts";
 
 /**
  * Los números de la pantalla principal.
@@ -23,9 +30,21 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
       return {
         stock: {
           productos: activos.length,
-          unidades: activos.reduce((s, p) => s + p.stock, 0),
-          valorCosto: activos.reduce((s, p) => s + p.stock * (p.precioCosto ?? 0), 0),
-          valorVenta: activos.reduce((s, p) => s + p.stock * p.precioVenta, 0),
+          // Separadas del peso por lo mismo de siempre: 9.500 gramos de pan no
+          // son 9.500 unidades de nada.
+          unidades: activos.filter((p) => !p.porPeso).reduce((s, p) => s + p.stock, 0),
+          gramos: activos.filter((p) => p.porPeso).reduce((s, p) => s + p.stock, 0),
+          // Por la misma regla que un renglón de venta: un producto por peso
+          // guarda su stock en gramos y su precio por kilo, así que
+          // multiplicarlos a secas da mil veces de más.
+          valorCosto: activos.reduce(
+            (s, p) => s + importeRenglon(p.precioCosto ?? 0, p.stock, p.porPeso),
+            0
+          ),
+          valorVenta: activos.reduce(
+            (s, p) => s + importeRenglon(p.precioVenta, p.stock, p.porPeso),
+            0
+          ),
           bajo: activos.filter((p) => p.stock <= p.stockMinimo && p.stock > 0).length,
           sinStock: activos.filter((p) => p.stock === 0).length,
           inactivos: d.productos.filter((p) => !p.activo).length,
@@ -53,7 +72,8 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
         hoyVentas: {
           cantidad: ventasDeHoy.length,
           total: ventasDeHoy.reduce((s, p) => s + p.total, 0),
-          unidades: ventasDeHoy.flatMap((p) => p.items).reduce((s, i) => s + i.cantidad, 0),
+          unidades: contarRenglones(ventasDeHoy.flatMap((p) => p.items)).unidades,
+          gramos: contarRenglones(ventasDeHoy.flatMap((p) => p.items)).gramos,
         },
 
         caja: caja

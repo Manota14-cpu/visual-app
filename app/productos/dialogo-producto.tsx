@@ -18,6 +18,7 @@ interface Formulario {
   sku: string;
   codigoBarras: string;
   unidadMedida: string;
+  porPeso: boolean;
   precioVenta: string;
   precioCosto: string;
   precioMayorista: string;
@@ -33,6 +34,7 @@ const vacio: Formulario = {
   sku: "",
   codigoBarras: "",
   unidadMedida: "unidad",
+  porPeso: false,
   precioVenta: "",
   precioCosto: "",
   precioMayorista: "",
@@ -49,6 +51,7 @@ function desde(producto: Producto): Formulario {
     sku: producto.sku ?? "",
     codigoBarras: producto.codigoBarras ?? "",
     unidadMedida: producto.unidadMedida,
+    porPeso: producto.porPeso,
     precioVenta: String(producto.precioVenta),
     precioCosto: producto.precioCosto ? String(producto.precioCosto) : "",
     precioMayorista: producto.precioMayorista ? String(producto.precioMayorista) : "",
@@ -90,7 +93,13 @@ export function DialogoProducto({
   );
   const [guardando, setGuardando] = useState(false);
 
-  const campo = (clave: keyof Formulario) => ({
+  // Solo las claves de texto: `porPeso` es un interruptor y tiene su propio
+  // manejo. Sin esto, TypeScript deja pasar un booleano al `value` de un input.
+  type ClaveTexto = {
+    [K in keyof Formulario]: Formulario[K] extends string ? K : never;
+  }[keyof Formulario];
+
+  const campo = (clave: ClaveTexto) => ({
     value: datos[clave],
     onChange: (e: { target: { value: string } }) =>
       setDatos((previo) => ({ ...previo, [clave]: e.target.value })),
@@ -118,6 +127,7 @@ export function DialogoProducto({
       sku: datos.sku,
       codigoBarras: datos.codigoBarras,
       unidadMedida: datos.unidadMedida,
+      porPeso: datos.porPeso,
       precioVenta: Math.round(leerNumero(datos.precioVenta) ?? 0),
       precioCosto: Math.round(leerNumero(datos.precioCosto) ?? 0),
       precioMayorista: Math.round(leerNumero(datos.precioMayorista) ?? 0),
@@ -184,15 +194,34 @@ export function DialogoProducto({
           <Campo etiqueta="Código de barras" placeholder="7790000000000" inputMode="numeric" {...campo("codigoBarras")} />
         </div>
 
+        {/* Va arriba de los precios porque cambia lo que significan: con esto
+            prendido, el precio es por kilo y el stock se cuenta en gramos. */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-linea bg-lienzo px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={datos.porPeso}
+            onChange={(e) => setDatos((previo) => ({ ...previo, porPeso: e.target.checked }))}
+            className="mt-0.5 h-4 w-4 cursor-pointer"
+          />
+          <span className="min-w-0">
+            <span className="block text-base">Se vende por peso</span>
+            <span className="block text-chico text-tinta-suave">
+              Para pan, fiambre, verdura: se pone el precio del kilo y en la caja se cobra lo que
+              pese. Medio kilo de algo a $1.000 el kilo sale $500.
+            </span>
+          </span>
+        </label>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <Campo
-            etiqueta="Precio de venta"
+            etiqueta={datos.porPeso ? "Precio por kilo" : "Precio de venta"}
             inputMode="decimal"
             placeholder="0"
+            ayuda={datos.porPeso ? "Lo que sale un kilo entero" : undefined}
             {...campo("precioVenta")}
           />
           <Campo
-            etiqueta="Costo"
+            etiqueta={datos.porPeso ? "Costo por kilo" : "Costo"}
             inputMode="decimal"
             placeholder="0"
             ayuda={
