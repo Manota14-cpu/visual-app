@@ -1,15 +1,13 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { inicial, nuevoId, Regla, type Almacen } from "../almacen.ts";
+import { anfitrion } from "../anfitrion.ts";
 import type { Ruteador } from "../http.ts";
 import { lanzar } from "../lanzar.ts";
 import { direccionesDeRed } from "../red.ts";
 import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../reglas.ts";
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
-import { estaEscuchandoEnRed, latir, puertoDeEscucha } from "../vida.ts";
-
-export const VERSION = "2.0.0";
+import { estaEscuchandoEnRed, puertoDeEscucha } from "../vida.ts";
 
 /**
  * El archivo de datos y lo que se puede hacer con él.
@@ -30,7 +28,9 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
   r.get("/sistema", ({ usuario }) =>
     a.leer((d) => {
       const basico = {
-        programa: VERSION,
+        // La de `package.json`: es la misma que muestra Windows en "Aplicaciones
+        // instaladas" y la que compara la actualización automática.
+        programa: anfitrion().version,
         config: { negocio: d.config.negocio, detalle: d.config.detalle },
       };
 
@@ -142,20 +142,19 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
   /**
    * Abre el buscador de carpetas de Windows y devuelve la que se eligió.
    *
-   * Una página web no puede mirar el disco, así que la alternativa era que el
-   * negocio escriba la ruta a mano. Escribir `C:\Users\...\OneDrive\Documentos`
-   * sin equivocarse no es razonable para pedírselo a nadie, y una ruta mal
-   * escrita acá significa creer que hay copia de seguridad cuando no la hay.
+   * Escribir `C:\Users\...\OneDrive\Documentos` sin equivocarse no es
+   * razonable para pedírselo a nadie, y una ruta mal escrita acá significa
+   * creer que hay copia de seguridad cuando no la hay.
    *
-   * El cuadro lo abre PowerShell, que en Windows ya viene y está firmado. En
-   * cualquier otro sistema no hay cuadro y queda el campo para escribirla, que
-   * sigue funcionando.
+   * El cuadro es el nativo de Windows y lo abre la aplicación de escritorio.
+   * Sin ella —el servidor corriendo solo, o el pedido llegando desde un
+   * celular, donde no hay a quién mostrarle un cuadro— queda el campo para
+   * escribirla, que sigue funcionando.
    */
   r.post("/sistema/elegir-carpeta", async () => {
-    if (process.platform !== "win32") {
-      throw new Regla("Escribí la ruta de la carpeta a mano.");
-    }
-    return { carpeta: await elegirCarpeta() };
+    const elegir = anfitrion().elegirCarpeta;
+    if (!elegir) throw new Regla("Escribí la ruta de la carpeta a mano.");
+    return { carpeta: await elegir() };
   }, "dueno");
 
   /**
@@ -209,7 +208,9 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
     // "AppData".
     const carpeta = path.dirname(a.archivo);
 
-    if (process.platform === "win32") lanzar("explorer.exe", [carpeta]);
+    const abrir = anfitrion().abrirCarpeta;
+    if (abrir) abrir(carpeta);
+    else if (process.platform === "win32") lanzar("explorer.exe", [carpeta]);
     else if (process.platform === "darwin") lanzar("open", [carpeta]);
     else lanzar("xdg-open", [carpeta]);
 
@@ -227,20 +228,14 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
     return { ok: true };
   }, "dueno");
 
-  // La ventana avisa cada veinte segundos que sigue abierta. Sin esto, el
-  // servidor no tendría forma de saber que ya nadie lo está mirando.
-  r.post("/sistema/latido", () => {
-    latir();
-    return { ok: true };
-  }, "libre");
-
   r.post("/sistema/apagar", () => {
     // Se contesta primero y se apaga después: si el proceso se fuera acá mismo,
-    // el navegador vería la conexión cortada y mostraría un error justo cuando
+    // la ventana vería la conexión cortada y mostraría un error justo cuando
     // todo salió bien.
-    setTimeout(() => process.exit(0), 250).unref();
+    const apagar = anfitrion().apagar ?? (() => process.exit(0));
+    setTimeout(apagar, 250).unref();
     return { ok: true };
-  });
+  }, "dueno");
 
   r.post("/sistema/ejemplo", () => {
     const vacia = a.leer((d) => d.productos.length === 0 && d.pedidos.length === 0);
@@ -270,57 +265,6 @@ function estadoDeRed(a: Almacen) {
     // configurado: el cambio recién se aplica al reabrir el programa.
     escuchandoEnRed: estaEscuchandoEnRed(),
   };
-}
-
-/**
- * El cuadro de "elegir carpeta" de Windows, por PowerShell.
- *
- * Devuelve la ruta, o null si la persona cerró el cuadro sin elegir — que no es
- * un error, es cambiar de opinión.
- *
- * Se usa `spawn` y no `lanzar`, porque acá sí hace falta esperar la respuesta.
- * Y con tiempo límite: el cuadro es una ventana, y una ventana que se queda
- * abierta y olvidada dejaría este pedido colgado para siempre.
- */
-function elegirCarpeta(): Promise<string | null> {
-  const guion = [
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-    "$d.Description = 'Elegí dónde dejar la copia de seguridad de Visual App'",
-    // Un pendrive o un disco externo son el destino más probable, así que el
-    // cuadro arranca en "Esta PC" y no en Documentos.
-    "$d.RootFolder = [System.Environment+SpecialFolder]::MyComputer",
-    "$d.ShowNewFolderButton = $true",
-    "if ($d.ShowDialog() -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }",
-  ].join("; ");
-
-  return new Promise((resolver) => {
-    const hijo = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", guion],
-      { windowsHide: true }
-    );
-
-    let salida = "";
-    hijo.stdout.on("data", (trozo: Buffer) => {
-      salida += trozo.toString("utf8");
-    });
-
-    const reloj = setTimeout(() => {
-      hijo.kill();
-      resolver(null);
-    }, 120_000);
-
-    const terminar = (ruta: string | null) => {
-      clearTimeout(reloj);
-      resolver(ruta);
-    };
-
-    hijo.on("close", () => terminar(salida.trim() || null));
-    // Que no se pueda abrir el cuadro no puede voltear el servidor: queda el
-    // campo para escribir la ruta.
-    hijo.on("error", () => terminar(null));
-  });
 }
 
 /**

@@ -20,7 +20,7 @@ import path from "node:path";
 
 const RAIZ = path.join(import.meta.dirname, "..");
 const SALTAR = new Set([
-  "node_modules", ".git", "dist", "out", ".next", "publicar",
+  "node_modules", ".git", "dist", "out", ".next", "publicar", "compilado",
   ".claude", ".agents", ".codex",
 ]);
 

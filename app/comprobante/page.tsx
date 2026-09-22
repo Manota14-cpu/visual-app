@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Boton, Cargando, Vacio } from "@/components/ui";
-import { useDatos, useLatido } from "@/lib/datos";
+import { useDatos } from "@/lib/datos";
 import { cantidadEscrita, fechaHora, importeRenglon, numero, plata } from "@/lib/formato";
 import { ETIQUETA_PAGO, type Pedido, type Sistema } from "@/lib/tipos";
 
@@ -29,12 +29,6 @@ function Comprobante() {
 
   const { datos: venta, cargando } = useDatos<Pedido>(id ? `/pedidos/${id}` : null);
   const { datos: sistema } = useDatos<Sistema>("/sistema");
-
-  // Esta es la única pantalla que no usa el marco, así que era la única que no
-  // avisaba que la ventana seguía abierta: dejar el comprobante en pantalla dos
-  // minutos —mientras se busca papel, o se atiende a alguien— apagaba el
-  // programa, y al volver a ventas ya no había con quién hablar.
-  useLatido();
 
   if (!id) {
     return (

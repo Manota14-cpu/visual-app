@@ -1,220 +1,215 @@
-# Visual App
+# Visual Solution
 
-Panel de stock, caja y ventas para un negocio chico. Corre en la propia
-computadora: un servidor local sirve la interfaz, atiende la API y guarda todo
-en un archivo JSON.
+Stock, caja y ventas para un negocio chico. Es una **aplicación de escritorio
+para Windows**: se instala con `Visual-Solution-Setup.exe`, se abre desde el menú
+Inicio o el escritorio, y se actualiza sola desde GitHub Releases.
 
-No hay base de datos que instalar, ni cuenta en la nube, ni conexión a internet.
-Se abre con doble clic y se cierra cerrando la ventana.
+No hay base de datos que instalar, ni cuenta en la nube, ni conexión a internet
+para trabajar. La computadora no necesita Node.js, Git ni ningún navegador.
 
 ```
-Abrir Visual App.cmd
-   ├── servidor/   Node: API y reglas del negocio     escucha en 127.0.0.1
-   ├── sitio/      la interfaz de Next ya compilada
-   └── datos.json  %LOCALAPPDATA%\Visual App\
+Visual Solution.exe                 Electron: la ventana y el proceso principal
+  ├── electron/main.js              arranca el servidor, abre la ventana, actualiza
+  ├── electron/preload.js           lo único de la app que ve la página
+  ├── servidor/  (compilado)        API y reglas del negocio · 127.0.0.1:5177
+  ├── out/                          la interfaz de Next ya compilada
+  └── datos.json                    %LOCALAPPDATA%\Visual App\
 ```
 
-## Se abre como una aplicación, no como una página
+## Cómo funciona
 
-Al abrirlo aparece **una ventana propia**: barra de título con el ícono, su lugar
-en la barra de tareas, y ni barra de direcciones ni pestañas. Adentro no hay
-consola negra dando vueltas.
+Al abrir `Visual Solution.exe` aparece una pantalla de **"Cargando…"** con el logo
+mientras el proceso principal de Electron arranca el servidor **adentro de sí
+mismo** —no hay un segundo programa, ni consola, ni PowerShell— y después la
+ventana del programa, con su ícono y su lugar en la barra de tareas.
 
-Eso lo hace el modo aplicación de Edge o Chrome (`--app=`), que dibuja la
-interfaz sin el resto del navegador. El perfil va aparte, en la carpeta de datos,
-así la ventana no arrastra las pestañas ni la sesión de quien esté navegando y
-Windows la agrupa como un programa distinto. Si no hubiera ninguno de los dos
-—raro en Windows— se cae al navegador por omisión.
+El servidor sigue siendo HTTP (en `127.0.0.1`, o en la red del local si se
+prende el acceso desde el celular) porque el teléfono del mostrador entra por
+el wifi a esa misma dirección. La ventana lo usa igual que el celular.
 
-**Cerrar la ventana cierra el programa.** La interfaz avisa cada veinte segundos
-que sigue abierta; si pasa un minuto y medio sin noticias, el servidor se apaga
-solo. El margen es generoso a propósito: una computadora que se suspende no tiene
-que voltear el servidor con una venta a medio cobrar. Para apagarlo en el momento
-está *Configuración → Cerrar Visual App*.
+**Cerrar la ventana cierra el programa.** Una sola copia abierta a la vez: un
+segundo doble clic trae al frente la ventana que ya estaba, porque dos procesos
+escribiendo el mismo archivo lo dejarían con lo que guardó el último.
 
-## Armarlo
+### Seguridad de la ventana
 
-Hace falta **Node.js 20 o más nuevo**:
+- `contextIsolation: true`, `nodeIntegration: false` y `sandbox: true`: la página
+  no tiene Node, ni `require`, ni acceso al disco.
+- `electron/preload.js` expone **solo** `window.visualSolution.actualizacion`
+  (estado, buscar, descargar, instalar). Cada mensaje lo valida el proceso
+  principal: tiene que venir de la ventana del programa y de su propio origen.
+- La ventana no navega fuera del programa. Los enlaces `https:` se abren en el
+  navegador de la computadora; cualquier otra cosa se descarta.
+- Todos los permisos del navegador (cámara, micrófono, ubicación,
+  notificaciones) se niegan, salvo copiar al portapapeles.
+- Sin menú ni herramientas de desarrollo en el programa instalado.
+
+### Lo que antes hacía Windows por PowerShell
+
+| Antes (hasta 2.0.0) | Ahora |
+| --- | --- |
+| `Abrir Visual App.cmd` → PowerShell → `node` → Edge en modo aplicación | `Visual Solution.exe` |
+| Un "latido" cada 20 s para que el servidor se apague al cerrar Edge | Cerrar la ventana cierra el proceso |
+| Cuadro de "elegir carpeta" con PowerShell | `dialog.showOpenDialog` de Electron |
+| Abrir la carpeta de datos con `explorer.exe` | `shell.openPath` |
+| Instalador y desinstalador en PowerShell | NSIS, generado por electron-builder |
+| Actualizador propio: `version.json` + zip + PowerShell | electron-updater + GitHub Releases |
+
+El servidor no importa Electron: lo que necesita de Windows se lo pide al
+programa que lo contiene (`servidor/anfitrion.ts`). Así las rutas se siguen
+probando con Vitest sin ventanas.
+
+## Los datos
+
+Siguen en **`%LOCALAPPDATA%\Visual App\datos.json`**, con el nombre viejo de la
+carpeta a propósito: ahí están los datos de todos los que ya usaban Visual App.
+Cambiarle el nombre haría que la versión nueva arranque con una base vacía.
+
+**Desinstalar no borra los datos.** Reinstalar los encuentra donde estaban.
+
+Para probar sin tocar los datos de verdad, se puede elegir otra carpeta:
+
+```powershell
+$env:VISUALAPP_DATOS = "C:\prueba"; & "Visual Solution.exe"
+```
+
+## Desarrollarlo
+
+Hace falta **Node.js 22 o más nuevo** (`winget install OpenJS.NodeJS.LTS`).
 
 ```bash
-winget install OpenJS.NodeJS.LTS
+npm install
+npm run dev
 ```
 
-Después, en la carpeta del proyecto:
+`npm run dev` abre la aplicación de escritorio en modo desarrollo: arranca el
+servidor desde el TypeScript sin compilar, levanta `next dev` con recarga en
+caliente y abre la ventana contra él. F12 abre las herramientas de desarrollo.
+Al cerrar la ventana se cierra todo.
+
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | La aplicación de escritorio, en desarrollo |
+| `npm run build` | Compila la interfaz (`out/`) y el servidor (`compilado/`) |
+| `npm run dist` | Arma el instalador en `dist/` |
+| `npm run publicar` | Arma y publica en GitHub Releases (lo usa GitHub Actions) |
+| `npm run web` | Solo la interfaz, en el navegador (necesita `npm run servidor`) |
+| `npm run servidor` | Solo el servidor, sin ventana |
+| `npm run icono` | Regenera `build/icon.ico` desde el arte de la marca |
+| `npm run typecheck` | TypeScript, interfaz y servidor |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest |
+
+## Armar el instalador
 
 ```bash
-powershell -ExecutionPolicy Bypass -File .\build.ps1
+npm run dist
 ```
 
-Deja la carpeta `dist` (1,4 MB), que es a la vez el instalador y el programa.
+Deja en `dist/`:
 
-## Instalarlo en una computadora
+```
+Visual-Solution-Setup.exe             el instalador
+Visual-Solution-Setup.exe.blockmap    para que las actualizaciones bajen solo lo que cambió
+latest.yml                            lo que lee la actualización automática
+win-unpacked/                         el programa sin instalar, para revisarlo
+```
 
-Se copia la carpeta `dist` a la máquina y se hace doble clic en
-**`Instalar Visual App.cmd`**. Se abre un asistente con ventana —bienvenida, barra
-de progreso y aviso de finalizado— que:
+El instalador (NSIS, en español):
 
-- copia el programa a `%LOCALAPPDATA%\Programs\Visual App`;
-- deja un acceso directo en el menú Inicio y, si se deja tildado, en el
-  escritorio, con su ícono;
-- lo anota en *Configuración → Aplicaciones → Aplicaciones instaladas*, con su
-  desinstalador;
-- ofrece abrir Visual App al terminar.
+- deja elegir la carpeta; por omisión `%LOCALAPPDATA%\Programs\Visual Solution`;
+- instala para el usuario, **sin pedir permisos de administrador** — igual que
+  Discord o Spotify, y es lo que permite actualizar sin el cartel de UAC;
+- crea el acceso directo del menú Inicio y el del escritorio;
+- lo registra en *Configuración → Aplicaciones → Aplicaciones instaladas*, con
+  su desinstalador;
+- ofrece abrir el programa al terminar.
 
-Si falta Node.js, el asistente lo dice en la primera pantalla y ofrece
-instalarlo ahí mismo en vez de fallar a mitad de camino.
+La configuración está en [`electron-builder.yml`](electron-builder.yml). Lo que
+viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
+`electron-updater`: ni el código fuente, ni Next, ni React. Por eso `next`,
+`react` y compañía están en `devDependencies`: solo hacen falta para compilar.
 
-**No pide permisos de administrador.** Instalar en la carpeta del usuario evita
-el cartel de Control de cuentas y deja que el programa escriba sus datos sin
-pelear con los permisos de «Archivos de programa».
+## Publicar una versión
 
-### Elegir dónde se instala
+1. Cambiar la versión en `package.json` siguiendo
+   [Semantic Versioning](https://semver.org/lang/es/):
+   `3.0.1` para arreglos, `3.1.0` para funciones nuevas, `4.0.0` para cambios
+   que rompen algo. Es la única versión que hay: la leen electron-builder,
+   electron-updater, Windows y la pantalla de Configuración.
 
-El asistente propone `%LOCALAPPDATA%\Programs\Visual App` y tiene un botón
-*Cambiar…* para llevarlo a otro lado —otro disco, normalmente—. Tres cosas que
-no son detalles de forma:
+   ```bash
+   npm version 3.0.1 --no-git-tag-version
+   ```
 
-- **Se elige la carpeta padre, y el programa va en una `Visual App` adentro.** El
-  desinstalador borra la carpeta del programa entera y sin preguntar: si el
-  destino fuera la carpeta elegida a secas, desinstalar desde «Documentos» se
-  llevaría Documentos. Además se rechaza la raíz de un disco, las carpetas del
-  sistema y cualquier carpeta que ya tenga otra cosa adentro.
-- **Se rechazan las carpetas que necesitan administrador**, en vez de pedir
-  permisos. Instalar en «Archivos de programa» haría que cada actualización
-  automática tuviera que pedir confirmación, y volvería el cartel de Control de
-  cuentas que todo lo demás está armado para evitar. Se explica y se propone
-  elegir otra.
-- **Reinstalar y actualizar no mudan el programa.** La carpeta sale de lo que
-  Windows tiene anotado (`InstallLocation`), no de una ruta escrita a mano: si
-  no, elegir otra carpeta una vez dejaría dos copias, y la actualización
-  automática mudaría el programa a espaldas de todos. El desinstalador, por lo
-  mismo, borra la carpeta donde él está.
+2. Commit y etiqueta:
 
-Antes de borrar, el desinstalador comprueba que la carpeta sea de verdad una
-instalación de Visual App —que tenga `servidor\index.js` adentro—. Es barato y es
-lo único que separa «desinstalar» de «borrar lo que haya en esa ruta».
+   ```bash
+   git commit -am "Visual Solution 3.0.1"
+   git tag v3.0.1
+   git push origin main v3.0.1
+   ```
 
-Reinstalar encima actualiza la versión: el asistente se da cuenta de que ya está
-instalado y lo dice —«Actualizar Visual App», con la versión a la que va—, cierra la
-copia abierta, reemplaza los archivos y deja los datos intactos.
+3. GitHub Actions ([`.github/workflows/publicar.yml`](.github/workflows/publicar.yml))
+   comprueba que la etiqueta coincida con `package.json`, corre los tipos y las
+   pruebas, arma el instalador y crea la publicación con
+   `Visual-Solution-Setup.exe`, su `.blockmap` y `latest.yml` adjuntos.
 
-**Actualizar no puede dejar a nadie sin programa.** La copia nueva se arma al
-lado, en `Visual App.nuevo`, y recién cuando está entera reemplaza a la anterior con
-un cambio de nombre, que es instantáneo. Antes se borraba lo viejo y después se
-copiaba encima: si la copia se cortaba a la mitad —el disco lleno, el antivirus
-tomando un archivo, un pendrive que se desconecta— no quedaba ni lo uno ni lo
-otro. Si el reemplazo falla, la instalación anterior vuelve a su lugar.
+No hay que cargar ningún secreto para esto: el `GITHUB_TOKEN` lo crea GitHub en
+cada ejecución. Solo la firma de código (abajo) usa secretos, y es opcional.
 
-Antes de empezar comprueba que el paquete esté completo, y al terminar que lo
-instalado se pueda abrir. Una carpeta copiada a medias instalaba igual —los
-archivos que no encontraba los salteaba— y el programa fallaba después, lejos de
-ahí, con un error que no señalaba a nadie.
+Para pasarle el programa a alguien nuevo, este enlace baja siempre la última
+versión:
 
-**Cerrar lo que está abierto se hace por ruta, no por nombre.** Se buscaban
-procesos cuya línea de comandos mencionara «Visual App», y eso alcanza para
-llevarse puesto cualquier proceso ajeno que solo nombre la palabra — pasó en una
-prueba, con la terminal desde la que se estaba probando. Ahora se apunta a la
-carpeta instalada y a la del paquete. Además se cierra el lanzador **antes** que
-el servidor: se queda esperándolo y, si el servidor muere de golpe, cree que el
-programa se cayó y saca un cartel de error en medio de una actualización que
-salió bien.
-
-**Al desinstalar, los datos no se borran.** El catálogo, las ventas y los turnos
-son del negocio, no del programa: quedan en `%LOCALAPPDATA%\Visual App` y el
-desinstalador dice dónde, para copiarlos o borrarlos a mano.
-
-También se puede usar sin instalar nada: **`Abrir Visual App.cmd`** abre el mismo
-programa desde donde esté la carpeta.
+<https://github.com/Manota14-cpu/visual-app/releases/latest/download/Visual-Solution-Setup.exe>
 
 ## Que la versión nueva llegue sola
 
-Cada computadora tiene su copia, así que sin esto actualizar es ir hasta cada
-una. En lugar de eso, el programa mira un archivo publicado en internet que dice
-cuál es la última versión, y si hay una más nueva lo ofrece en
-*Configuración → Actualizaciones*.
+El programa instalado busca versiones nuevas en GitHub Releases unos segundos
+después de abrir y cada seis horas. Si hay una, se lo avisa **al dueño**, arriba
+de cualquier pantalla:
 
-**Para publicar una versión**, con GitHub:
+> **Hay una nueva versión disponible.** Versión actual: 3.0.0 · Nueva versión: 3.0.1
+> [Más tarde] [Actualizar ahora]
 
-```bash
-powershell -ExecutionPolicy Bypass -File .\build.ps1 `
-  -Notas "Qué cambió, en una línea" `
-  -Descargas "https://github.com/Manota14-cpu/visual-app/releases/latest/download/visual-app.zip"
-```
+"Actualizar ahora" la baja mostrando el porcentaje, y al terminar ofrece
+**Reiniciar y actualizar**: el programa se cierra, se instala la versión nueva
+sin asistente y vuelve a abrirse solo. Los datos no se tocan.
 
-Eso deja `publicar\` con dos archivos —`visual-app.zip` y `version.json`— para
-subir como adjuntos de una publicación nueva del repositorio. Los nombres no
-llevan la versión a propósito: `releases/latest/download/<archivo>` apunta
-siempre a la última publicación, así que la dirección nunca cambia y las copias
-instaladas no tienen nada que reconfigurar.
+Tres decisiones:
 
-La dirección que consultan esas copias está en `servidor/actualizacion.ts`
-(`ORIGEN`) y se puede pisar con la variable `VISUALAPP_ACTUALIZACIONES`. Mientras
-diga `USUARIO/REPO` la comprobación queda apagada: sin una dirección de verdad
-no hay a quién preguntarle, y molestar con un error cada día por algo que nadie
-configuró es peor que no hacer nada.
+- **Nunca se baja ni se instala sin que el dueño lo pida.** Esto es una caja
+  registradora: una actualización que arranca sola a mitad de un turno es lo
+  peor que puede pasar.
+- **Si quedó bajada, se instala al cerrar.** Si el dueño bajó la versión pero
+  siguió trabajando, se instala sola la próxima vez que se cierra el programa.
+- **Quien atiende no ve el aviso.** No le toca decidir reiniciar la caja.
 
-**Tres decisiones que valen la pena conocer:**
+Lo mismo está en *Configuración → Programa → Actualizaciones*, con un botón para
+buscar a mano. El detalle técnico de cada búsqueda queda en
+`actualizaciones.log`, al lado de los datos.
 
-- **Nunca se actualiza solo.** Esto es una caja registradora. Una actualización
-  que arranca sola a mitad de un turno es lo peor que puede pasar, por más buena
-  que sea la versión nueva. Se busca al arrancar y una vez por día, se avisa, y
-  se espera a que alguien apriete el botón.
-- **El canal es la confianza.** No podemos firmar ejecutables, así que quien
-  controle esa dirección controla lo que se instala. Por eso solo se acepta
-  HTTPS —salvo contra la propia computadora, que es lo que permite probar el
-  mecanismo completo— y el archivo se compara contra el SHA-256 que declara el
-  aviso. Si no coincide, no se descomprime ni se instala nada.
-- **Instalar no es asunto del actualizador.** Bajar el paquete y reemplazar el
-  programa son dos problemas distintos, y el segundo ya estaba resuelto: se
-  llama a `instalar.ps1`, con su copia al lado y su reemplazo atómico.
+electron-updater verifica el SHA-512 de lo que baja contra `latest.yml`: si no
+coincide, no se instala nada.
 
-Un detalle que costó encontrar: **el actualizador se lanza con `cmd /c start`,
-no con `detached`**. Lo primero que hace es cerrar Visual App, o sea a quien lo
-llamó; con `detached` a secas se moría junto con él y la actualización quedaba a
-mitad de camino — el paquete bajado y verificado, y el programa sin reemplazar.
-Y corre desde la carpeta del paquete nuevo, que es la única que la instalación
-no va a tocar: un script no puede pararse sobre el piso que está levantando.
+## Firmar el instalador
 
-### Por qué el asistente es un script y no un Setup.exe
+**El instalador y el programa salen sin firma digital**, porque firmar requiere
+un certificado de firma de código que se compra a una autoridad reconocida. Sin
+firma, Windows reacciona así:
 
-Por lo mismo que el programa: un `.exe` sin firma digital lo bloquea Smart App
-Control, y un instalador bloqueado es peor que no tener instalador. El asistente
-está escrito con WinForms sobre PowerShell —firmado por Microsoft— así que abre
-en cualquier Windows. La ventana es la misma que daría un Setup compilado; lo
-que cambia es quién la dibuja.
+- **Windows SmartScreen** (todas las computadoras): al abrir el instalador
+  bajado de internet aparece *"Windows protegió su PC"*. Se sigue con *Más
+  información → Ejecutar de todas formas*. Con un certificado, el aviso
+  desaparece a medida que el certificado gana reputación.
+- **Control inteligente de aplicaciones** (Smart App Control, solo en algunas
+  instalaciones nuevas de Windows 11): **puede bloquear el programa sin ofrecer
+  forma de seguir**. Con archivos sin firma decide archivo por archivo, sin un
+  criterio previsible: en las pruebas, un `.exe` armado corrió y otro armado
+  minutos después, igual de sin firma, quedó bloqueado. Es el único caso en que
+  la firma no es opcional.
 
-Dos detalles de Windows que costaron encontrar, por si aparecen de nuevo:
-
-- **La consola se esconde recién cuando el asistente ya está en pantalla.** A la
-  primera ventana que muestra un proceso, Windows le aplica el estado del
-  proceso; escondiendo la consola antes, la ventana del asistente heredaba ese
-  estado y no aparecía nunca.
-- **El desinstalador no se registra con `-WindowStyle Hidden`**, por la misma
-  razón: arrancaría oculto y su ventana también.
-
-### El ícono
-
-`herramientas/icono.mjs` dibuja el ícono en seis tamaños y arma el `.ico`, con
-funciones de distancia y el `zlib` que ya trae Node. Son cien líneas y evitan
-sumar una dependencia de imágenes al proyecto — y que el resultado dependa de
-qué fuentes tenga instaladas la máquina que compila.
-
-### Por qué no es un .exe
-
-Lo fue, y no se pudo usar. Windows 11 trae **Control de aplicaciones inteligente**
-(Smart App Control), que bloquea cualquier ejecutable sin firma digital — y
-también los `.dll` que ese ejecutable cargue. El registro de eventos lo dice
-sin vueltas:
-
-> Code Integrity determined that a process attempted to load `Visual App.dll` that
-> did not meet the Enterprise signing level requirements
-
-Firmar cuesta un certificado de una autoridad reconocida. Node, en cambio, ya
-viene firmado por OpenJS: el mismo programa, ejecutado por `node.exe`, arranca
-sin que Windows lo mire de reojo. Por eso el paquete es una carpeta con archivos
-`.js` y un `.cmd` que los abre, en vez de un ejecutable propio.
-
-Para comprobar si ese control está activo en una computadora:
+Para saber si una computadora lo tiene activo:
 
 ```powershell
 (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy").VerifiedAndReputablePolicyState
@@ -222,31 +217,49 @@ Para comprobar si ese control está activo en una computadora:
 
 `0` es apagado, `1` es bloqueando, `2` es evaluando.
 
-## Desarrollarlo
+Cuando haya certificado, se carga en GitHub como secretos
+(*Settings → Secrets and variables → Actions → New repository secret*) y el
+workflow firma solo:
 
-Dos procesos, en dos terminales:
-
-```bash
-npm run servidor   # API en http://localhost:5177, con recarga al guardar
-```
-
-```bash
-npm run dev        # interfaz Next en http://localhost:3000
-```
-
-La interfaz apunta sola al 5177 cuando corre en desarrollo (`lib/api.ts`); en el
-paquete las dos cosas son el mismo origen. El servidor se ejecuta en TypeScript
-sin compilar: Node 22.6+ borra los tipos y lo corre tal cual.
-
-| Comando | Qué hace |
+| Secreto | Qué va |
 | --- | --- |
-| `npm run dev` | Interfaz con recarga en caliente |
-| `npm run servidor` | Servidor solo, sin abrir el navegador |
-| `npm run build` | Compila la interfaz a `out/` |
-| `npm run paquete` | Corre `build.ps1` y arma `dist/` |
-| `npm run typecheck` | TypeScript, interfaz y servidor |
-| `npm run lint` | ESLint |
-| `npm run test` | Vitest |
+| `CSC_LINK` | El certificado `.pfx` en base64 (`[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx"))`) |
+| `CSC_KEY_PASSWORD` | La contraseña del `.pfx` |
+
+Los certificados emitidos desde 2023 suelen venir en un token físico o en la
+nube, y no como `.pfx`. En ese caso se firma con la herramienta del emisor, que
+electron-builder acepta con `win.signtoolOptions.sign` en `electron-builder.yml`.
+
+## Cambiar el ícono o el nombre
+
+**El ícono** sale de `build/icon.ico`. Para cambiarlo, reemplazar ese archivo
+por otro `.ico` con al menos 256 × 256 px —o regenerarlo desde el arte con
+`npm run icono`— y volver a armar. La marca de adentro de la interfaz es
+`public/marca.svg`.
+
+**El nombre** está en tres lugares que tienen que coincidir:
+
+- `productName` en `package.json` y en `electron-builder.yml` (nombre del `.exe`,
+  del acceso directo y de "Aplicaciones instaladas"), y `executableName` y
+  `shortcutName` en `electron-builder.yml`;
+- `NOMBRE` en `electron/main.js` (título de la ventana y pantalla de carga);
+- los textos de la interfaz (`app/layout.tsx`, `components/marco.tsx`,
+  `app/ingresar/page.tsx`).
+
+No cambiar `appId` (`com.visualsolution.app`): es lo que Windows usa para saber
+que una versión nueva es el mismo programa. Cambiarlo instala uno aparte.
+
+## Desde Visual App 2.0.0 o anterior
+
+Las computadoras con la versión anterior (la de PowerShell) **no pasan solas** a
+esta: su actualizador busca otro tipo de archivo que las publicaciones nuevas ya
+no traen. Hay que instalar `Visual-Solution-Setup.exe` una vez. Los datos se
+encuentran solos (es la misma carpeta). Después se puede desinstalar
+"Visual App" desde *Aplicaciones instaladas*: su desinstalador tampoco borra los
+datos.
+
+Si la versión vieja está abierta, Visual Solution lo detecta y pide cerrarla
+antes de abrir: las dos escribirían el mismo archivo.
 
 ## Las pantallas
 
@@ -269,7 +282,13 @@ sin compilar: Node 22.6+ borra los tipos y lo corre tal cual.
 app/            pantallas (Next, App Router, todo del lado del cliente)
 components/     marco, piezas de interfaz, íconos y gráficos propios
 lib/            cliente de la API, tipos, formato de números y fechas
+electron/       la aplicación de escritorio
+  main.js       proceso principal: servidor, ventana, actualizaciones
+  preload.js    el puente con la página (solo actualizaciones)
 servidor/       el backend
+  aplicacion.ts arranca el servidor HTTP con todas sus rutas
+  anfitrion.ts  lo que el servidor le pide al programa que lo contiene
+  index.ts      el servidor solo, sin ventana (npm run servidor)
   tipos.ts      el modelo de datos
   almacen.ts    el archivo JSON: cargar, guardar y volver atrás
   reglas.ts     las reglas del negocio
@@ -278,18 +297,20 @@ servidor/       el backend
   lanzar.ts     abrir otro programa sin arriesgar este
   sitio.ts      la interfaz compilada, servida desde el disco
   api/          endpoints, uno por área
-instalador/     instalar.ps1, desinstalar.ps1 y su lanzador
+build/          recursos del instalador (icon.ico)
 herramientas/   el generador del ícono
-build.ps1       arma dist/
+.github/        el workflow que publica cada versión
+electron-builder.yml   cómo se arma el instalador
 ```
 
-El servidor no usa ninguna dependencia: solo los módulos que trae Node.
+El servidor no usa ninguna dependencia: solo los módulos que trae Node. La
+única dependencia que viaja en el instalador es `electron-updater`.
 
 ## El aspecto
 
 Superficies blancas apoyadas sobre un gris muy claro, esquinas amplias, sombras
 en dos capas —una cerca para apoyar, otra lejos y muy abierta para separar del
-fondo— y un solo azul, el del sistema, para todo lo accionable. La tipografía es
+fondo— y un solo azul, el del logo, para todo lo accionable. La tipografía es
 la del sistema operativo: SF en Mac, Segoe UI Variable en Windows.
 
 **Dónde va el vidrio.** La barra lateral, el encabezado y la barra inferior del
@@ -381,8 +402,9 @@ el resultado del período resta los gastos operativos y no las compras.
 margen daría 100% y el valor del inventario mentiría sin que nada avise.
 
 **Una sola instancia.** Dos procesos escribiendo el mismo archivo lo dejarían con
-lo que guardó el último. Si el puerto ya está tomado por otra copia de Visual App,
-la segunda no arranca: trae al frente la ventana que ya estaba.
+lo que guardó el último. Un segundo doble clic trae al frente la ventana que ya
+estaba; y si el puerto lo tiene la versión anterior (Visual App), se avisa y no
+se abre.
 
 **Escuchar en 127.0.0.1 no alcanza para estar cerrado.** Cualquier página web
 abierta en el navegador corre *en* esta computadora, y puede mandarle pedidos:
@@ -403,7 +425,7 @@ de restar. Se borra y se registra de nuevo desde la caja.
 **Abrir otro programa no puede apagar este.** Un `spawn` que falla no lanza una
 excepción: avisa con un evento `error`, y un evento `error` que nadie escucha
 termina el proceso. Envuelto en `try/catch` parecía cubierto y no lo estaba. Que
-no abra el explorador de archivos es un incordio; que se apague Visual App con una
+no abra el explorador de archivos es un incordio; que se apague el programa con una
 venta a medio cobrar, no.
 
 **Del diálogo, solo el fondo cierra.** Un clic sobre el fondo de un `<dialog>`
@@ -432,12 +454,10 @@ Se retiraron, además de la base:
   servicios externos que una aplicación de escritorio no tiene.
 - **Sincronización con la tienda web**: ya no hay dos aplicaciones mirando la
   misma tabla.
-- **La contraseña de acceso**: quien abre el programa es quien está sentado en la
-  computadora.
 
 ## Licencia y autoría
 
-**Visual App** es un producto de **Visual Solution**.
+**Visual Solution** es un producto de **Visual Solution**.
 
 <https://visual-solution.vercel.app>
 

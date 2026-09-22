@@ -9,6 +9,7 @@ export default defineConfig([
     ".next/**",
     "out/**",
     "dist/**",
+    "compilado/**",
     "next-env.d.ts",
     // El servidor y las herramientas son Node puro, no React: esta
     // configuración es la de Next y sus reglas con tipos no los alcanzan —
@@ -21,6 +22,14 @@ export default defineConfig([
     ".claude/**",
     ".codex/**",
   ]),
+  {
+    // El proceso de Electron es CommonJS a propósito: el preload corre con
+    // `sandbox: true`, y ahí Electron solo acepta `require`. El principal va
+    // igual para que los dos se lean de la misma manera.
+    files: ["electron/**/*.js"],
+    languageOptions: { sourceType: "commonjs" },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   {
     rules: {
       "@typescript-eslint/no-unused-vars": [

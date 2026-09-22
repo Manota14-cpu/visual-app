@@ -5,7 +5,10 @@ node_modules/
 .next/
 out/
 
-# Paquete
+# El servidor compilado (npm run build:servidor)
+compilado/
+
+# El instalador (npm run dist)
 dist/
 
 # TypeScript
@@ -31,5 +34,5 @@ npm-debug.log*
 .codex/
 skills-lock.json
 
-# Lo que se sube a una publicación (se arma con build.ps1)
+# Lo que armaba el instalador anterior (build.ps1), hasta la versión 2.0.0
 publicar/

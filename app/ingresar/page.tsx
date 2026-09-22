@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Boton, Campo, Hoja } from "@/components/ui";
 import { api, ErrorApi } from "@/lib/api";
 import { useSesion } from "@/lib/sesion";
-import { useLatido } from "@/lib/datos";
 
 /**
  * La pantalla de ingreso.
@@ -21,11 +20,6 @@ import { useLatido } from "@/lib/datos";
 export default function PaginaIngresar() {
   const { exigeIngreso, cargando } = useSesion();
 
-  // El servidor se apaga solo si nadie avisa que la ventana sigue abierta. Sin
-  // esto, quien tarda un minuto y medio en escribir su contraseña se queda sin
-  // programa a mitad de camino.
-  useLatido();
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-lienzo px-4 py-10">
       <div className="w-full max-w-sm">
@@ -33,7 +27,7 @@ export default function PaginaIngresar() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/marca.svg" alt="" aria-hidden="true" className="h-14 w-14" draggable={false} />
           <span>
-            <span className="block font-titulo text-grande font-semibold">Visual App</span>
+            <span className="block font-titulo text-grande font-semibold">Visual Solution</span>
             <span className="block text-base text-tinta-suave">
               Stock, caja y ventas del negocio
             </span>

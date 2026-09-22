@@ -58,43 +58,6 @@ export function useDatos<T>(ruta: string | null, opciones?: { silencioso?: boole
 }
 
 /**
- * Le avisa al programa que la ventana sigue abierta.
- *
- * El servidor corre en la misma computadora y no tiene forma de saber si alguien
- * lo está mirando: sin este pulso, quedaría dando vueltas después de cerrar la
- * ventana. Con él, cerrar la ventana apaga la aplicación al minuto y medio, como
- * cualquier programa.
- *
- * Va en el marco, así que late en todas las pantallas. El comprobante para
- * imprimir es la única que no usa el marco, y lo llama por su cuenta.
- */
-export function useLatido(): void {
-  useEffect(() => {
-    const latir = () => {
-      void api.post("/sistema/latido").catch(() => {
-        // Si el servidor se cayó, la pantalla ya lo va a decir por su cuenta al
-        // pedir datos: acá no hay nada que hacer con el error.
-      });
-    };
-
-    latir();
-    const reloj = setInterval(latir, 20_000);
-
-    // Al volver de otra ventana conviene avisar enseguida y no esperar el turno:
-    // si la computadora estuvo suspendida, el margen puede estar por vencerse.
-    const alVolver = () => {
-      if (document.visibilityState === "visible") latir();
-    };
-    document.addEventListener("visibilitychange", alVolver);
-
-    return () => {
-      clearInterval(reloj);
-      document.removeEventListener("visibilitychange", alVolver);
-    };
-  }, []);
-}
-
-/**
  * Espera a que se deje de escribir antes de buscar.
  *
  * Sin esto, escribir "servilletas" son once consultas de las que solo importa

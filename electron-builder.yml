@@ -1,0 +1,75 @@
+# =====================================================================
+#  Cómo se arma el instalador de Visual Solution
+# =====================================================================
+#  `npm run dist` deja en dist/:
+#
+#    Visual-Solution-Setup.exe           el instalador (NSIS)
+#    Visual-Solution-Setup.exe.blockmap  para bajar solo lo que cambió
+#    latest.yml                          lo que lee la actualización automática
+#
+#  La versión sale de package.json. El nombre del instalador no la lleva a
+#  propósito: así `releases/latest/download/Visual-Solution-Setup.exe` es un
+#  enlace fijo que siempre baja la última, para pasárselo a un cliente nuevo.
+# =====================================================================
+
+appId: com.visualsolution.app
+productName: Visual Solution
+copyright: © Visual Solution
+
+directories:
+  output: dist
+  buildResources: build
+
+# Lo que viaja adentro del programa. La interfaz ya compilada, el servidor ya
+# compilado y el proceso de Electron: ni el código fuente, ni Next, ni React
+# (que solo hacen falta para compilar). De node_modules entra solo lo de
+# "dependencies" en package.json, que es electron-updater.
+files:
+  - package.json
+  - electron/**
+  - compilado/**
+  - out/**
+  - "!**/*.map"
+
+# El servidor son módulos ES (`import`). Electron los carga igual desde
+# adentro del .asar, pero se dejan afuera para no depender de eso.
+asarUnpack:
+  - compilado/**
+
+# Sin módulos nativos: no hay nada que recompilar para Electron.
+npmRebuild: false
+
+win:
+  executableName: Visual Solution
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  artifactName: Visual-Solution-Setup.${ext}
+  # Instalador con pasos (no el de un solo clic): deja elegir la carpeta.
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Para el usuario que instala, sin pedir permisos de administrador: igual
+  # que Discord o Spotify. Es lo que permite actualizar sin el cartel de UAC.
+  perMachine: false
+  createStartMenuShortcut: true
+  createDesktopShortcut: true
+  shortcutName: Visual Solution
+  uninstallDisplayName: Visual Solution
+  runAfterFinish: true
+  installerLanguages: [es_ES]
+  language: "3082"
+  # Desinstalar borra el programa, nunca los datos del negocio. Los datos
+  # viven en %LOCALAPPDATA%\Visual App y el desinstalador no los toca: una
+  # reinstalación los encuentra donde estaban.
+  deleteAppDataOnUninstall: false
+
+publish:
+  provider: github
+  owner: Manota14-cpu
+  repo: visual-app
+  # Publicada directamente, no como borrador: electron-updater no ve los
+  # borradores, así que una versión en borrador no le llegaría a nadie.
+  releaseType: release

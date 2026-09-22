@@ -1,9 +1,10 @@
 /**
  * El único punto por el que la interfaz habla con el backend.
  *
- * En el ejecutable, el servidor de C# sirve estas páginas y la API desde el
- * mismo origen, así que la dirección es relativa. Durante el desarrollo, Next
- * corre en el 3000 y el backend en el 5177, y ahí hace falta nombrarlo.
+ * En la aplicación, el servidor que corre adentro de Visual Solution sirve
+ * estas páginas y la API desde el mismo origen, así que la dirección es
+ * relativa. Durante el desarrollo, Next corre en el 3000 y la API en el 5177
+ * (o en el que haya quedado: `electron/main.js` lo pasa en NEXT_PUBLIC_API).
  */
 const BASE =
   process.env.NODE_ENV === "development"
@@ -36,7 +37,7 @@ async function pedir<T>(ruta: string, opciones?: RequestInit): Promise<T> {
   } catch {
     // El backend es un programa en la misma computadora: si no contesta, se
     // cerró. Decirlo así ahorra buscar problemas de red que no existen.
-    throw new ErrorApi("No se puede hablar con el programa. ¿Se cerró la ventana negra?", 0);
+    throw new ErrorApi("No se puede hablar con el programa. Cerrá Visual Solution y volvé a abrirlo.", 0);
   }
 
   if (respuesta.status === 204) return undefined as T;

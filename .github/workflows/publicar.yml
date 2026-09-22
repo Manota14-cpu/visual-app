@@ -1,0 +1,80 @@
+# =====================================================================
+#  Publicar una versión de Visual Solution
+# =====================================================================
+#  Se dispara al subir una etiqueta de versión:
+#
+#    git tag v3.0.1
+#    git push origin v3.0.1
+#
+#  y en una máquina Windows de GitHub:
+#
+#    1. comprueba que la etiqueta coincida con la versión de package.json,
+#    2. instala las dependencias,
+#    3. corre los tipos y las pruebas (si algo falla, no se publica nada),
+#    4. arma el instalador con electron-builder,
+#    5. crea la publicación en GitHub Releases con el instalador, el
+#       blockmap y latest.yml adjuntos.
+#
+#  Con eso, los programas instalados ven la versión nueva solos.
+#
+#  No hay ningún token escrito acá. GITHUB_TOKEN lo crea GitHub para cada
+#  ejecución y vence cuando termina. Los secretos de la firma de código son
+#  opcionales: si no están cargados, el instalador sale sin firmar.
+# =====================================================================
+
+name: Publicar versión
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+# Lo mínimo: poder crear la publicación y subirle archivos.
+permissions:
+  contents: write
+
+# Dos etiquetas seguidas no publican a la vez.
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: La etiqueta coincide con package.json
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::La etiqueta es $GITHUB_REF_NAME pero package.json dice $version. Cambiá la versión en package.json, o borrá la etiqueta y creala de nuevo."
+            exit 1
+          fi
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Armar y publicar el instalador
+        run: npm run publicar
+        env:
+          # Para crear la publicación y subir los archivos.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Firma de código (opcional). Ver README → "Firmar el instalador".
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

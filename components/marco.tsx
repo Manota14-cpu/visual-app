@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icono, type NombreIcono } from "@/components/iconos";
+import { AvisoActualizacion } from "@/components/actualizacion";
 import { Boton, Dialogo } from "@/components/ui";
-import { useDatos, useLatido } from "@/lib/datos";
+import { useDatos } from "@/lib/datos";
 import { useSesion } from "@/lib/sesion";
 import type { Sistema } from "@/lib/tipos";
 
@@ -164,9 +165,6 @@ export function Marco({
   const { usuario, exigeIngreso, cargando, esDueno } = useSesion();
   const [masAbierto, setMasAbierto] = useState(false);
 
-  // Mientras haya una pantalla abierta, el programa sabe que sigue en uso.
-  useLatido();
-
   // Sin sesión no se dibuja nada y se va a la pantalla de ingreso. Entrar por
   // la dirección escrita a mano es el caso normal —un acceso directo guardado,
   // la pestaña de ayer— y sin esto se vería una pantalla armada con errores en
@@ -223,7 +221,7 @@ export function Marco({
         <Link href="/panel" className="mb-5 flex items-center gap-2.5 px-2">
           <Marca />
           <span className="min-w-0">
-            <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual App</span>
+            <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual Solution</span>
             <span className="block truncate text-micro text-tinta-tenue">
               {sistema?.config.negocio ?? " "}
             </span>
@@ -273,6 +271,8 @@ export function Marco({
         </header>
 
         <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-12">
+          {/* La versión nueva se le ofrece al dueño, arriba de cualquier pantalla. */}
+          {esDueno && <AvisoActualizacion />}
           {vedada ? <SoloElDueno /> : children}
         </main>
 

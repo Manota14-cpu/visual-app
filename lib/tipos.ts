@@ -647,24 +647,6 @@ export interface ResultadoImportacion {
   omitidos: number;
 }
 
-// ───────────────────────────  Actualizaciones  ───────────────────────────
-
-export interface Actualizacion {
-  /** Falso mientras no se haya publicado un lugar de dónde bajar versiones. */
-  configurado: boolean;
-  instalada: string;
-  revisadoEn: Fecha | null;
-  buscando: boolean;
-  hay: boolean;
-  ultima: {
-    version: string;
-    notas: string | null;
-    fecha: string | null;
-    tamano: number | null;
-  } | null;
-  error: string | null;
-}
-
 /** La cuenta de un cliente: de dónde sale lo que debe, renglón por renglón. */
 export interface CuentaCliente {
   cliente: { id: string; nombre: string; telefono: string | null };

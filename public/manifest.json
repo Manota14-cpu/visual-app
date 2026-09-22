@@ -1,6 +1,6 @@
 {
-  "name": "Visual App",
-  "short_name": "Visual App",
+  "name": "Visual Solution",
+  "short_name": "Visual Solution",
   "description": "Stock, caja y ventas del negocio.",
   "start_url": "/panel",
   "scope": "/",

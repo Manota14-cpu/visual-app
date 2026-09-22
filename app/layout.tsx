@@ -5,9 +5,9 @@ import { ProveedorSesion } from "@/lib/sesion";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Visual App",
+  title: "Visual Solution",
   description: "Stock, caja y ventas del negocio, en tu computadora.",
-  applicationName: "Visual App",
+  applicationName: "Visual Solution",
   authors: [{ name: "Visual Solution", url: "https://visual-solution.vercel.app" }],
   creator: "Visual Solution",
   publisher: "Visual Solution",

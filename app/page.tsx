@@ -19,7 +19,7 @@ export default function Inicio() {
 
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <p className="font-titulo text-medio text-tinta-suave">Abriendo Visual App…</p>
+      <p className="font-titulo text-medio text-tinta-suave">Abriendo Visual Solution…</p>
     </main>
   );
 }

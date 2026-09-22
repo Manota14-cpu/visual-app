@@ -9,7 +9,8 @@ import { useDatos } from "@/lib/datos";
 import { useSesion } from "@/lib/sesion";
 import { api, ErrorApi } from "@/lib/api";
 import { fechaHora, numero, tamano } from "@/lib/formato";
-import type { Actualizacion, Sistema } from "@/lib/tipos";
+import type { Sistema } from "@/lib/tipos";
+import { TarjetaActualizaciones } from "@/components/actualizacion";
 import { Usuarios } from "./usuarios";
 import { AccesoDesdeElCelular } from "./red";
 
@@ -45,7 +46,6 @@ export default function PaginaConfiguracion() {
   const [copiando, setCopiando] = useState(false);
   const [vaciando, setVaciando] = useState(false);
   const [confirmacion, setConfirmacion] = useState("");
-  const [apagando, setApagando] = useState(false);
   // La copia que se está por restaurar, y la palabra que lo confirma.
   const [volviendoA, setVolviendoA] = useState<string | null>(null);
   // Si la copia elegida esta en el pendrive y no en esta computadora.
@@ -53,24 +53,6 @@ export default function PaginaConfiguracion() {
   const [confirmaVolver, setConfirmaVolver] = useState("");
   const [restaurando, setRestaurando] = useState(false);
   const [pestana, setPestana] = useState<IdPestana>("negocio");
-
-  /**
-   * Apaga el programa y cierra la ventana.
-   *
-   * El servidor contesta antes de irse, así que el pedido no falla; lo que sí
-   * puede fallar es cerrar la ventana, porque un navegador solo deja hacerlo
-   * cuando la abrió él. En modo aplicación la abrió él, así que se cierra.
-   */
-  async function apagar() {
-    setApagando(true);
-    try {
-      await api.post("/sistema/apagar");
-      setTimeout(() => window.close(), 400);
-    } catch (e) {
-      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo cerrar.");
-      setApagando(false);
-    }
-  }
 
   async function copiar() {
     setCopiando(true);
@@ -263,7 +245,7 @@ export default function PaginaConfiguracion() {
                       </p>
                       <p className="mt-2 text-chico text-tinta-suave">
                         Es un archivo de texto común. Copiarlo a un pendrive es todo el respaldo que hace
-                        falta; ponerlo en otra computadora con Visual App instalado es toda la mudanza.
+                        falta; ponerlo en otra computadora con Visual Solution instalado es toda la mudanza.
                       </p>
                     </div>
 
@@ -322,31 +304,19 @@ export default function PaginaConfiguracion() {
 
             {pestana === "programa" && (
               <>
-                <Actualizaciones />
+                <TarjetaActualizaciones />
 
-                <Hoja titulo="Visual App">
+                <Hoja titulo="Visual Solution">
                   <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
-                      <p className="text-base text-tinta-suave">
-                        Cerrar la ventana también apaga Visual App, pero tarda un minuto en darse cuenta.
-                        Con este botón se apaga en el momento.
-                      </p>
-                      <div>
-                        <Boton icono="salir" onClick={() => void apagar()} disabled={apagando}>
-                          {apagando ? "Cerrando…" : "Cerrar Visual App"}
-                        </Boton>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-linea pt-3 text-chico text-tinta-suave">
-                      <p>Visual App {datos.programa} · formato de datos v{datos.version}</p>
+                    <div className="text-chico text-tinta-suave">
+                      <p>Visual Solution {datos.programa} · formato de datos v{datos.version}</p>
                       <p className="mt-1">
                         © {new Date().getFullYear()} Visual Solution. Todos los derechos reservados.
                       </p>
                       <p className="mt-0.5">
-                        {/* Se abre afuera a propósito: la aplicación vive en una ventana sin
-                            barra de direcciones, y sin esto el sitio la reemplazaría y no
-                            habría cómo volver. */}
+                        {/* Se abre en el navegador de la computadora, no adentro del
+                            programa: la ventana no tiene barra de direcciones y el sitio no
+                            tendría cómo volver. Lo resuelve electron/main.js. */}
                         <a
                           href="https://visual-solution.vercel.app"
                           target="_blank"
@@ -572,130 +542,6 @@ function FormularioNegocio({
           <Boton tono="principal" onClick={() => void guardar()} disabled={guardando}>
             {guardando ? "Guardando…" : "Guardar"}
           </Boton>
-        </div>
-      </div>
-    </Hoja>
-  );
-}
-
-/**
- * Las novedades del programa.
- *
- * Buscar no cambia nada y se puede hacer cuando se quiera. Aplicar cierra
- * Visual App y lo vuelve a abrir, así que nunca pasa solo: esto es una caja
- * registradora, y una actualización que arranca sola a mitad de un turno es lo
- * peor que puede pasar por más buena que sea la versión nueva.
- */
-function Actualizaciones() {
-  const avisos = useAvisos();
-  const { datos, recargar } = useDatos<Actualizacion>("/actualizacion");
-  const [buscando, setBuscando] = useState(false);
-  const [aplicando, setAplicando] = useState(false);
-
-  async function buscar() {
-    setBuscando(true);
-    try {
-      // La respuesta ya trae el estado nuevo; recargar es para que lo tome la
-      // pantalla, no para enterarse del resultado.
-      const nuevo = await api.post<Actualizacion>("/actualizacion/revisar");
-      await recargar();
-      if (!nuevo.hay && !nuevo.error) avisos.exito("Ya tenés la última versión.");
-    } catch (e) {
-      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo buscar.");
-    } finally {
-      setBuscando(false);
-    }
-  }
-
-  async function actualizar() {
-    setAplicando(true);
-    try {
-      await api.post("/actualizacion/aplicar");
-      // A partir de acá el programa se apaga y el actualizador toma la posta.
-      // No hay nada más que hacer desde la pantalla que decirlo.
-    } catch (e) {
-      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo actualizar.");
-      setAplicando(false);
-    }
-  }
-
-  if (!datos) return null;
-
-  if (!datos.configurado) {
-    return (
-      <Hoja titulo="Actualizaciones">
-        <p className="text-base text-tinta-suave">
-          Esta copia no tiene configurado un lugar del que bajar versiones nuevas, así que se
-          actualiza a mano: se copia la carpeta del programa y se ejecuta el instalador.
-        </p>
-      </Hoja>
-    );
-  }
-
-  if (aplicando) {
-    return (
-      <Hoja titulo="Actualizaciones">
-        <div className="flex flex-col gap-2">
-          <p className="text-base">Bajando e instalando la versión {datos.ultima?.version}…</p>
-          <p className="text-base text-tinta-suave">
-            Visual App se va a cerrar y volver a abrir solo. No cierres esta ventana a mano; tus datos
-            no se tocan.
-          </p>
-        </div>
-      </Hoja>
-    );
-  }
-
-  return (
-    <Hoja
-      titulo="Actualizaciones"
-      accion={
-        datos.hay ? <Etiqueta tono="exito">hay una nueva</Etiqueta> : undefined
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {datos.hay && datos.ultima ? (
-          <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo p-3">
-            <p className="text-base">
-              Está disponible la versión <strong>{datos.ultima.version}</strong>
-              {datos.ultima.tamano ? ` (${tamano(datos.ultima.tamano)})` : ""}. Tenés la{" "}
-              {datos.instalada}.
-            </p>
-            {datos.ultima.notas && (
-              <p className="text-base text-tinta-suave">{datos.ultima.notas}</p>
-            )}
-            <p className="text-chico text-tinta-suave">
-              Se cierra y se vuelve a abrir solo, en menos de un minuto. Tus datos no se tocan.
-              Conviene hacerlo con la caja cerrada.
-            </p>
-            <div>
-              <Boton tono="principal" icono="listo" onClick={() => void actualizar()}>
-                Actualizar a {datos.ultima.version}
-              </Boton>
-            </div>
-          </div>
-        ) : (
-          <p className="text-base text-tinta-suave">
-            Tenés la versión {datos.instalada}, que es la última.
-          </p>
-        )}
-
-        {datos.error && (
-          <p className="text-chico text-tinta-tenue">
-            La última búsqueda no pudo consultar: {datos.error}. Si la computadora está sin internet
-            es normal.
-          </p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Boton icono="recargar" onClick={() => void buscar()} disabled={buscando || datos.buscando}>
-            {buscando || datos.buscando ? "Buscando…" : "Buscar actualizaciones"}
-          </Boton>
-          {datos.revisadoEn && (
-            <span className="text-chico text-tinta-tenue">
-              Última vez: {fechaHora(datos.revisadoEn)}
-            </span>
-          )}
         </div>
       </div>
     </Hoja>
