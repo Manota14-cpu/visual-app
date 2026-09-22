@@ -1,19 +1,20 @@
 # =====================================================================
-#  Cómo se arma el instalador de Visual Solution
+#  Cómo se arma el instalador de Visual App
 # =====================================================================
 #  `npm run dist` deja en dist/:
 #
-#    Visual-Solution-Setup.exe           el instalador (NSIS)
-#    Visual-Solution-Setup.exe.blockmap  para bajar solo lo que cambió
+#    Visual-App-Setup.exe                el instalador (NSIS)
+#    Visual-App-Setup.exe.blockmap       para bajar solo lo que cambió
 #    latest.yml                          lo que lee la actualización automática
 #
 #  La versión sale de package.json. El nombre del instalador no la lleva a
-#  propósito: así `releases/latest/download/Visual-Solution-Setup.exe` es un
+#  propósito: así `releases/latest/download/Visual-App-Setup.exe` es un
 #  enlace fijo que siempre baja la última, para pasárselo a un cliente nuevo.
 # =====================================================================
 
-appId: com.visualsolution.app
-productName: Visual Solution
+# Visual App es el programa; Visual Solution, la empresa que lo hace.
+appId: com.visualsolution.visualapp
+productName: Visual App
 copyright: © Visual Solution
 
 directories:
@@ -40,14 +41,14 @@ asarUnpack:
 npmRebuild: false
 
 win:
-  executableName: Visual Solution
+  executableName: Visual App
   icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
 
 nsis:
-  artifactName: Visual-Solution-Setup.${ext}
+  artifactName: Visual-App-Setup.${ext}
   # Instalador con pasos (no el de un solo clic): deja elegir la carpeta.
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -56,8 +57,8 @@ nsis:
   perMachine: false
   createStartMenuShortcut: true
   createDesktopShortcut: true
-  shortcutName: Visual Solution
-  uninstallDisplayName: Visual Solution
+  shortcutName: Visual App
+  uninstallDisplayName: Visual App
   runAfterFinish: true
   installerLanguages: [es_ES]
   language: "3082"
@@ -65,6 +66,8 @@ nsis:
   # viven en %LOCALAPPDATA%\Visual App y el desinstalador no los toca: una
   # reinstalación los encuentra donde estaban.
   deleteAppDataOnUninstall: false
+  # Pasos propios: retirar la Visual App de PowerShell (2.0.0 y anteriores).
+  include: build/installer.nsh
 
 publish:
   provider: github

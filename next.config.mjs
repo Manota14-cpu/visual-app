@@ -4,7 +4,7 @@ const nextConfig = {
 
   // La interfaz se compila a archivos estáticos y viaja adentro del .exe. No
   // hay servidor de Next en producción: quien atiende los pedidos es el
-  // servidor que corre adentro de Visual Solution (servidor/aplicacion.ts),
+  // servidor que corre adentro de Visual App (servidor/aplicacion.ts),
   // que además sirve estos archivos.
   output: "export",
 

@@ -27,7 +27,7 @@ export default function PaginaIngresar() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/marca.svg" alt="" aria-hidden="true" className="h-14 w-14" draggable={false} />
           <span>
-            <span className="block font-titulo text-grande font-semibold">Visual Solution</span>
+            <span className="block font-titulo text-grande font-semibold">Visual App</span>
             <span className="block text-base text-tinta-suave">
               Stock, caja y ventas del negocio
             </span>

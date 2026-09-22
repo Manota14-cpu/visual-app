@@ -1,8 +1,8 @@
 /**
  * Lo que la aplicación de escritorio le presta a la interfaz.
  *
- * Adentro de Visual Solution instalado, `electron/preload.js` deja un objeto
- * `window.visualSolution` con lo poco que la página puede pedirle al
+ * Adentro de Visual App instalado, `electron/preload.js` deja un objeto
+ * `window.visualApp` con lo poco que la página puede pedirle al
  * programa: las actualizaciones. En cualquier otro lado —el celular entrando
  * por el wifi del local, o `npm run web` en un navegador— no existe, y la
  * interfaz simplemente no ofrece lo que no puede hacer.
@@ -44,12 +44,12 @@ interface PuenteEscritorio {
 
 declare global {
   interface Window {
-    visualSolution?: PuenteEscritorio;
+    visualApp?: PuenteEscritorio;
   }
 }
 
 /** El puente, o `null` fuera de la aplicación de escritorio. */
 export function escritorio(): PuenteEscritorio | null {
   if (typeof window === "undefined") return null;
-  return window.visualSolution?.escritorio ? window.visualSolution : null;
+  return window.visualApp?.escritorio ? window.visualApp : null;
 }

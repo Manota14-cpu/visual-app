@@ -1,14 +1,14 @@
-# Visual Solution
+# Visual App
 
 Stock, caja y ventas para un negocio chico. Es una **aplicación de escritorio
-para Windows**: se instala con `Visual-Solution-Setup.exe`, se abre desde el menú
+para Windows**: se instala con `Visual-App-Setup.exe`, se abre desde el menú
 Inicio o el escritorio, y se actualiza sola desde GitHub Releases.
 
 No hay base de datos que instalar, ni cuenta en la nube, ni conexión a internet
 para trabajar. La computadora no necesita Node.js, Git ni ningún navegador.
 
 ```
-Visual Solution.exe                 Electron: la ventana y el proceso principal
+Visual App.exe                      Electron: la ventana y el proceso principal
   ├── electron/main.js              arranca el servidor, abre la ventana, actualiza
   ├── electron/preload.js           lo único de la app que ve la página
   ├── servidor/  (compilado)        API y reglas del negocio · 127.0.0.1:5177
@@ -18,7 +18,7 @@ Visual Solution.exe                 Electron: la ventana y el proceso principal
 
 ## Cómo funciona
 
-Al abrir `Visual Solution.exe` aparece una pantalla de **"Cargando…"** con el logo
+Al abrir `Visual App.exe` aparece una pantalla de **"Cargando…"** con el logo
 mientras el proceso principal de Electron arranca el servidor **adentro de sí
 mismo** —no hay un segundo programa, ni consola, ni PowerShell— y después la
 ventana del programa, con su ícono y su lugar en la barra de tareas.
@@ -35,7 +35,7 @@ escribiendo el mismo archivo lo dejarían con lo que guardó el último.
 
 - `contextIsolation: true`, `nodeIntegration: false` y `sandbox: true`: la página
   no tiene Node, ni `require`, ni acceso al disco.
-- `electron/preload.js` expone **solo** `window.visualSolution.actualizacion`
+- `electron/preload.js` expone **solo** `window.visualApp.actualizacion`
   (estado, buscar, descargar, instalar). Cada mensaje lo valida el proceso
   principal: tiene que venir de la ventana del programa y de su propio origen.
 - La ventana no navega fuera del programa. Los enlaces `https:` se abren en el
@@ -48,7 +48,7 @@ escribiendo el mismo archivo lo dejarían con lo que guardó el último.
 
 | Antes (hasta 2.0.0) | Ahora |
 | --- | --- |
-| `Abrir Visual App.cmd` → PowerShell → `node` → Edge en modo aplicación | `Visual Solution.exe` |
+| `Abrir Visual App.cmd` → PowerShell → `node` → Edge en modo aplicación | `Visual App.exe` |
 | Un "latido" cada 20 s para que el servidor se apague al cerrar Edge | Cerrar la ventana cierra el proceso |
 | Cuadro de "elegir carpeta" con PowerShell | `dialog.showOpenDialog` de Electron |
 | Abrir la carpeta de datos con `explorer.exe` | `shell.openPath` |
@@ -61,16 +61,15 @@ probando con Vitest sin ventanas.
 
 ## Los datos
 
-Siguen en **`%LOCALAPPDATA%\Visual App\datos.json`**, con el nombre viejo de la
-carpeta a propósito: ahí están los datos de todos los que ya usaban Visual App.
-Cambiarle el nombre haría que la versión nueva arranque con una base vacía.
+Siguen en **`%LOCALAPPDATA%\Visual App\datos.json`**, la misma carpeta que usaba
+la versión de PowerShell: ahí están los datos de todos los que ya la usaban.
 
 **Desinstalar no borra los datos.** Reinstalar los encuentra donde estaban.
 
 Para probar sin tocar los datos de verdad, se puede elegir otra carpeta:
 
 ```powershell
-$env:VISUALAPP_DATOS = "C:\prueba"; & "Visual Solution.exe"
+$env:VISUALAPP_DATOS = "C:\prueba"; & "Visual App.exe"
 ```
 
 ## Desarrollarlo
@@ -109,15 +108,15 @@ npm run dist
 Deja en `dist/`:
 
 ```
-Visual-Solution-Setup.exe             el instalador
-Visual-Solution-Setup.exe.blockmap    para que las actualizaciones bajen solo lo que cambió
+Visual-App-Setup.exe                  el instalador
+Visual-App-Setup.exe.blockmap         para que las actualizaciones bajen solo lo que cambió
 latest.yml                            lo que lee la actualización automática
 win-unpacked/                         el programa sin instalar, para revisarlo
 ```
 
 El instalador (NSIS, en español):
 
-- deja elegir la carpeta; por omisión `%LOCALAPPDATA%\Programs\Visual Solution`;
+- deja elegir la carpeta; por omisión `%LOCALAPPDATA%\Programs\Visual App`;
 - instala para el usuario, **sin pedir permisos de administrador** — igual que
   Discord o Spotify, y es lo que permite actualizar sin el cartel de UAC;
 - crea el acceso directo del menú Inicio y el del escritorio;
@@ -145,7 +144,7 @@ viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
 2. Commit y etiqueta:
 
    ```bash
-   git commit -am "Visual Solution 3.0.1"
+   git commit -am "Visual App 3.0.1"
    git tag v3.0.1
    git push origin main v3.0.1
    ```
@@ -153,7 +152,7 @@ viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
 3. GitHub Actions ([`.github/workflows/publicar.yml`](.github/workflows/publicar.yml))
    comprueba que la etiqueta coincida con `package.json`, corre los tipos y las
    pruebas, arma el instalador y crea la publicación con
-   `Visual-Solution-Setup.exe`, su `.blockmap` y `latest.yml` adjuntos.
+   `Visual-App-Setup.exe`, su `.blockmap` y `latest.yml` adjuntos.
 
 No hay que cargar ningún secreto para esto: el `GITHUB_TOKEN` lo crea GitHub en
 cada ejecución. Solo la firma de código (abajo) usa secretos, y es opcional.
@@ -161,7 +160,7 @@ cada ejecución. Solo la firma de código (abajo) usa secretos, y es opcional.
 Para pasarle el programa a alguien nuevo, este enlace baja siempre la última
 versión:
 
-<https://github.com/Manota14-cpu/visual-app/releases/latest/download/Visual-Solution-Setup.exe>
+<https://github.com/Manota14-cpu/visual-app/releases/latest/download/Visual-App-Setup.exe>
 
 ## Que la versión nueva llegue sola
 
@@ -246,20 +245,28 @@ por otro `.ico` con al menos 256 × 256 px —o regenerarlo desde el arte con
 - los textos de la interfaz (`app/layout.tsx`, `components/marco.tsx`,
   `app/ingresar/page.tsx`).
 
-No cambiar `appId` (`com.visualsolution.app`): es lo que Windows usa para saber
+No cambiar `appId` (`com.visualsolution.visualapp`): es lo que Windows usa para saber
 que una versión nueva es el mismo programa. Cambiarlo instala uno aparte.
 
 ## Desde Visual App 2.0.0 o anterior
 
 Las computadoras con la versión anterior (la de PowerShell) **no pasan solas** a
 esta: su actualizador busca otro tipo de archivo que las publicaciones nuevas ya
-no traen. Hay que instalar `Visual-Solution-Setup.exe` una vez. Los datos se
-encuentran solos (es la misma carpeta). Después se puede desinstalar
-"Visual App" desde *Aplicaciones instaladas*: su desinstalador tampoco borra los
-datos.
+no traen. Hay que instalar `Visual-App-Setup.exe` una vez, y el instalador
+retira la versión vieja solo (`build/installer.nsh`):
 
-Si la versión vieja está abierta, Visual Solution lo detecta y pide cerrarla
-antes de abrir: las dos escribirían el mismo archivo.
+- borra sus archivos (`servidor\`, `sitio\`, los `.ps1` y los `.cmd`), que no
+  se pisan con ninguno del programa nuevo aunque estén en la misma carpeta;
+- borra su renglón de *Aplicaciones instaladas*, para que no queden dos
+  "Visual App" — y para que nadie desinstale la vieja y se lleve la carpeta
+  con el programa nuevo adentro;
+- borra el Node que traía (`%LOCALAPPDATA%\Visual App\runtime`).
+
+Lo hace después de instalar: si se cancela, la vieja queda como estaba. Los
+datos se usan tal cual (es la misma carpeta).
+
+Si la versión vieja está abierta, Visual App lo detecta al arrancar y pide
+cerrarla: las dos escribirían el mismo archivo.
 
 ## Las pantallas
 
@@ -457,7 +464,7 @@ Se retiraron, además de la base:
 
 ## Licencia y autoría
 
-**Visual Solution** es un producto de **Visual Solution**.
+**Visual App** es un producto de **Visual Solution**.
 
 <https://visual-solution.vercel.app>
 

@@ -3,7 +3,7 @@
 // El puente entre la ventana y el programa.
 //
 // La página corre aislada: no tiene Node, ni `require`, ni acceso al disco.
-// Lo único que ve del programa es este objeto, `window.visualSolution`, y lo
+// Lo único que ve del programa es este objeto, `window.visualApp`, y lo
 // único que puede hacer con él es preguntar por actualizaciones y pedir que se
 // bajen o se instalen. Cada pedido es un mensaje que el proceso principal
 // valida antes de hacer nada.
@@ -13,7 +13,7 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("visualSolution", {
+contextBridge.exposeInMainWorld("visualApp", {
   escritorio: true,
   actualizacion: {
     estado: () => ipcRenderer.invoke("actualizacion:estado"),

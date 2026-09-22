@@ -1,11 +1,11 @@
 "use strict";
 
 // =====================================================================
-// Visual Solution — la aplicación de escritorio.
+// Visual App — la aplicación de escritorio (de Visual Solution).
 //
 // Este es el proceso principal de Electron. Hace cuatro cosas:
 //
-//   1. Arranca el servidor de Visual Solution adentro de este mismo
+//   1. Arranca el servidor de Visual App adentro de este mismo
 //      proceso: la API, los datos y la interfaz compilada. No hay una
 //      consola, ni un Node aparte, ni un navegador.
 //   2. Muestra la ventana del programa contra ese servidor, con una
@@ -25,14 +25,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
-const NOMBRE = "Visual Solution";
+const NOMBRE = "Visual App";
 const DESARROLLO = !app.isPackaged;
 const RAIZ = path.join(__dirname, "..");
 
 // El AppUserModelID agrupa las ventanas en la barra de tareas y es el que usan
 // las notificaciones de Windows. Tiene que coincidir con el `appId` de
 // electron-builder.yml, que es el que queda en el acceso directo.
-app.setAppUserModelId("com.visualsolution.app");
+app.setAppUserModelId("com.visualsolution.visualapp");
 
 // Una sola copia abierta. Dos procesos escribiendo el mismo archivo de datos lo
 // dejarían con lo que guardó el último: un doble clic de más no puede costar
@@ -47,7 +47,7 @@ if (!app.requestSingleInstanceLock()) {
     ventana.focus();
   });
 
-  app.whenReady().then(arrancar).catch((error) => fallar("No se pudo abrir Visual Solution.", error));
+  app.whenReady().then(arrancar).catch((error) => fallar("No se pudo abrir Visual App.", error));
 }
 
 /** @type {BrowserWindow | null} */
@@ -104,10 +104,10 @@ async function arrancar() {
       await dialog.showMessageBox({
         type: "warning",
         title: NOMBRE,
-        message: "Visual Solution ya está abierto.",
+        message: "Visual App ya está abierto.",
         detail:
-          "Hay otra copia del programa abierta, que puede ser la versión anterior (Visual App). " +
-          "Cerrala y volvé a abrir Visual Solution.\n\n" +
+          "Hay otra copia del programa abierta, que puede ser la versión anterior. " +
+          "Cerrala y volvé a abrir Visual App.\n\n" +
           "No se abren dos a la vez porque las dos escribirían el mismo archivo de datos.",
       });
       app.quit();
@@ -245,7 +245,7 @@ function crearVentana(direccion) {
   // Si la interfaz no carga, que la pantalla de carga no quede para siempre.
   nueva.webContents.on("did-fail-load", (_e, codigo, descripcion, url, principal) => {
     if (!principal || codigo === -3) return; // -3: navegación cancelada, no es un error
-    fallar("No se pudo mostrar Visual Solution.", new Error(`${descripcion} (${codigo}) en ${url}`));
+    fallar("No se pudo mostrar Visual App.", new Error(`${descripcion} (${codigo}) en ${url}`));
   });
 
   protegerNavegacion(nueva);
@@ -280,7 +280,7 @@ function crearVentana(direccion) {
 // ─────────────────────────────  Seguridad  ─────────────────────────────
 
 /**
- * La ventana solo muestra Visual Solution.
+ * La ventana solo muestra Visual App.
  *
  * Un enlace a un sitio —el de Visual Solution, en Configuración— se abre en
  * el navegador de la computadora, no adentro del programa: la ventana no

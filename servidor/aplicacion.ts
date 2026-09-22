@@ -35,7 +35,7 @@ import { rutasTraspaso } from "./api/traspaso.ts";
 import { rutasUsuarios } from "./api/usuarios.ts";
 
 // =====================================================================
-// Visual Solution — panel de stock, caja y ventas.
+// Visual App — panel de stock, caja y ventas.
 //
 // Un servidor chico que atiende en la propia computadora: sirve la interfaz
 // ya compilada, expone la API y guarda todo en un archivo JSON. No hay base
@@ -81,7 +81,7 @@ export class OtraCopiaAbierta extends Error {
   readonly puerto: number;
 
   constructor(puerto: number) {
-    super(`Visual Solution ya está abierto en el puerto ${puerto}.`);
+    super(`Visual App ya está abierto en el puerto ${puerto}.`);
     this.name = "OtraCopiaAbierta";
     this.puerto = puerto;
   }
@@ -140,7 +140,7 @@ async function atender(
   const enRed = almacen.leer((d) => d.config.enRed);
   if (!puedeEntrar(req.headers.host, enRed) || !puedeEntrar(req.headers.origin, enRed)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Visual Solution solo atiende pedidos de esta computadora o de la red del local.");
+    res.end("Visual App solo atiende pedidos de esta computadora o de la red del local.");
     return;
   }
 
@@ -344,11 +344,10 @@ function resguardarAlAbrir(almacen: Almacen): void {
  * la reemplaza cada actualización, y puede terminar en un lugar donde Windows
  * no deja escribir.
  *
- * La carpeta se sigue llamando "Visual App" aunque el programa ahora se llame
- * Visual Solution, y es a propósito: ahí están el catálogo, las ventas y los
- * turnos de todos los que ya lo usan. Cambiarle el nombre haría que la versión
- * nueva arranque con una base vacía, con los datos intactos al lado pero
- * invisibles.
+ * La carpeta es la misma que usaba la versión de PowerShell: ahí están el
+ * catálogo, las ventas y los turnos de todos los que ya lo usan. Cambiarla
+ * haría que la versión nueva arranque con una base vacía, con los datos
+ * intactos al lado pero invisibles.
  */
 export function carpetaDeDatos(elegida?: string): string {
   if (elegida) return elegida;

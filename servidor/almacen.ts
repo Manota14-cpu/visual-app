@@ -242,7 +242,7 @@ export class Almacen {
     }
 
     if (!nueva || typeof nueva !== "object" || !Array.isArray(nueva.productos)) {
-      throw new Regla("Ese archivo no es una copia de Visual Solution.");
+      throw new Regla("Ese archivo no es una copia de Visual App.");
     }
 
     const respaldoPrevio = this.copiar();

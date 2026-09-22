@@ -31,7 +31,7 @@ try {
   });
 
   console.log("");
-  console.log("  Visual Solution (servidor solo)");
+  console.log("  Visual App (servidor solo)");
   console.log(`  Abierto en   http://localhost:${servidor.puerto}`);
   if (servidor.almacen.leer((d) => d.config.enRed)) {
     for (const ip of direccionesDeRed()) {

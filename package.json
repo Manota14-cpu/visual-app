@@ -1,6 +1,6 @@
 {
-  "name": "visual-solution",
-  "productName": "Visual Solution",
+  "name": "visual-app",
+  "productName": "Visual App",
   "version": "3.0.0",
   "private": true,
   "description": "Stock, caja y ventas para el negocio. Aplicación de escritorio para Windows.",

@@ -245,7 +245,7 @@ export default function PaginaConfiguracion() {
                       </p>
                       <p className="mt-2 text-chico text-tinta-suave">
                         Es un archivo de texto común. Copiarlo a un pendrive es todo el respaldo que hace
-                        falta; ponerlo en otra computadora con Visual Solution instalado es toda la mudanza.
+                        falta; ponerlo en otra computadora con Visual App instalado es toda la mudanza.
                       </p>
                     </div>
 
@@ -306,10 +306,10 @@ export default function PaginaConfiguracion() {
               <>
                 <TarjetaActualizaciones />
 
-                <Hoja titulo="Visual Solution">
+                <Hoja titulo="Visual App">
                   <div className="flex flex-col gap-4">
                     <div className="text-chico text-tinta-suave">
-                      <p>Visual Solution {datos.programa} · formato de datos v{datos.version}</p>
+                      <p>Visual App {datos.programa} · formato de datos v{datos.version}</p>
                       <p className="mt-1">
                         © {new Date().getFullYear()} Visual Solution. Todos los derechos reservados.
                       </p>

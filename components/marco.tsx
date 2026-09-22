@@ -221,7 +221,7 @@ export function Marco({
         <Link href="/panel" className="mb-5 flex items-center gap-2.5 px-2">
           <Marca />
           <span className="min-w-0">
-            <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual Solution</span>
+            <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual App</span>
             <span className="block truncate text-micro text-tinta-tenue">
               {sistema?.config.negocio ?? " "}
             </span>
