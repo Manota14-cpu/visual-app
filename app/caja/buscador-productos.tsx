@@ -86,6 +86,7 @@ export function BuscadorProductos({
         id: string;
         nombre: string;
         sku: string | null;
+        codigoBarras: string | null;
         precioVenta: number;
         stock: number;
         unidadMedida: string;
@@ -96,6 +97,7 @@ export function BuscadorProductos({
         id: producto.id,
         nombre: producto.nombre,
         sku: producto.sku,
+        codigoBarras: producto.codigoBarras,
         precio: producto.precioVenta,
         stock: producto.stock,
         unidadMedida: producto.unidadMedida,

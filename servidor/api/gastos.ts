@@ -91,8 +91,7 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
         categorias: CATEGORIAS_GASTO,
         cajaAbierta: caja ? { id: caja.id, numero: caja.numero } : null,
       };
-    })
-  );
+    }), "dueno");
 
   r.post("/gastos", ({ cuerpo }) =>
     a.escribir((d) => {
@@ -104,6 +103,7 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
         monto: 0,
         metodoPago: "efectivo",
         proveedor: null,
+      proveedorId: null,
         comprobante: null,
         notas: null,
         cajaId: null,
@@ -114,8 +114,7 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
       aplicar(d, gasto, cuerpo, true);
       d.gastos.push(gasto);
       return vista(d, gasto);
-    })
-  );
+    }), "dueno");
 
   r.put("/gastos/:id", ({ params, cuerpo }) =>
     a.escribir((d) => {
@@ -125,8 +124,7 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
       exigirCajaEditable(d, gasto);
       aplicar(d, gasto, cuerpo, false);
       return vista(d, gasto);
-    })
-  );
+    }), "dueno");
 
   r.borrar("/gastos/:id", ({ params }) =>
     a.escribir((d) => {
@@ -142,8 +140,7 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
       quitarRetiro(d, gasto);
       d.gastos.splice(indice, 1);
       return { ok: true };
-    })
-  );
+    }), "dueno");
 }
 
 // ──────────────────────────────  Ayudas  ──────────────────────────────
@@ -231,6 +228,9 @@ export function vista(d: BaseDatos, g: Gasto) {
     monto: g.monto,
     metodoPago: g.metodoPago,
     proveedor: g.proveedor,
+    // Cuando el gasto es un pago a una cuenta corriente, esto lo dice. Sin
+    // esto la pantalla no puede distinguir "pagué al molino" de "pagué la luz".
+    proveedorId: g.proveedorId,
     comprobante: g.comprobante,
     notas: g.notas,
     cajaId: g.cajaId,

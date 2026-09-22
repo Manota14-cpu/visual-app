@@ -1,5 +1,6 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
+import { esDueno } from "../usuarios.ts";
 import {
   ajustarStock,
   contiene,
@@ -52,8 +53,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       };
       d.categorias.push(categoria);
       return categoria;
-    })
-  );
+    }), "dueno");
 
   r.put("/categorias/:id", ({ params, cuerpo }) =>
     a.escribir((d) => {
@@ -74,8 +74,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       categoria.nombre = nombre;
       categoria.color = colorValido(cuerpo.color as string);
       return categoria;
-    })
-  );
+    }), "dueno");
 
   r.borrar("/categorias/:id", ({ params }) =>
     a.escribir((d) => {
@@ -96,12 +95,11 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
 
       d.categorias.splice(indice, 1);
       return { ok: true };
-    })
-  );
+    }), "dueno");
 
   // ─────────────────────────────  Productos  ─────────────────────────────
 
-  r.get("/productos", ({ consulta }) =>
+  r.get("/productos", ({ consulta, usuario }) =>
     a.leer((d) => {
       const estado = consulta.get("estado") ?? "activos";
       let productos = d.productos.filter((p) => {
@@ -152,7 +150,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
           productos.sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
       }
 
-      return paginar(productos, consulta, 30, (p) => vista(d, p));
+      return paginar(productos, consulta, 30, (p) => vista(d, p, esDueno(usuario)));
     })
   );
 
@@ -181,6 +179,10 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
           id: p.id,
           nombre: p.nombre,
           sku: p.sku,
+          // Para la etiqueta: si el producto ya tiene código de fábrica, se
+          // imprime ese y no el SKU interno, o el lector del mostrador leería
+          // uno y el catálogo tendría el otro.
+          codigoBarras: p.codigoBarras,
           precio: p.precioVenta,
           stock: p.stock,
           unidadMedida: p.unidadMedida,
@@ -202,25 +204,24 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
           precio: p.precioVenta,
           categoria: nombreCategoria(d, p.categoriaId),
         }))
-    )
-  );
+    ), "dueno");
 
-  r.get("/productos/codigo/:codigo", ({ params }) =>
+  r.get("/productos/codigo/:codigo", ({ params, usuario }) =>
     a.leer((d) => {
       const codigo = params.codigo!.trim();
       const producto = d.productos.find(
         (p) => p.activo && (p.codigoBarras === codigo || p.sku === codigo)
       );
       return producto
-        ? vista(d, producto)
+        ? vista(d, producto, esDueno(usuario))
         : noEncontrado("Ningún producto tiene ese código.");
     })
   );
 
-  r.get("/productos/:id", ({ params }) =>
+  r.get("/productos/:id", ({ params, usuario }) =>
     a.leer((d) => {
       const producto = d.productos.find((p) => p.id === params.id);
-      return producto ? vista(d, producto) : noEncontrado("Ese producto ya no existe.");
+      return producto ? vista(d, producto, esDueno(usuario)) : noEncontrado("Ese producto ya no existe.");
     })
   );
 
@@ -230,10 +231,9 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         .filter((c) => c.productoId === params.id)
         .sort((x, y) => y.creadoEn.localeCompare(x.creadoEn))
         .slice(0, 60)
-    )
-  );
+    ), "dueno");
 
-  r.post("/productos", ({ cuerpo }) =>
+  r.post("/productos", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const ahora = new Date().toISOString();
       const producto: Producto = {
@@ -261,14 +261,13 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
 
       const inicial = Math.max(entero(cuerpo.stock, 0), 0);
       if (inicial > 0) {
-        ajustarStock(d, producto.id, inicial, "Carga inicial", "creacion");
+        ajustarStock(d, producto.id, inicial, "Carga inicial", "creacion", usuario);
       }
 
       return vista(d, producto);
-    })
-  );
+    }), "dueno");
 
-  r.put("/productos/:id", ({ params, cuerpo }) =>
+  r.put("/productos/:id", ({ params, cuerpo, usuario }) =>
     a.escribir((d) => {
       const producto = d.productos.find((p) => p.id === params.id);
       if (!producto) throw new Regla("Ese producto ya no existe.");
@@ -285,12 +284,12 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         producto,
         precioAnterior,
         costoAnterior,
-        recortar(cuerpo.motivoPrecio as string, 200) ?? "Edición del producto"
+        recortar(cuerpo.motivoPrecio as string, 200) ?? "Edición del producto",
+        usuario
       );
 
       return vista(d, producto);
-    })
-  );
+    }), "dueno");
 
   r.borrar("/productos/:id", ({ params }) =>
     a.escribir((d) => {
@@ -302,8 +301,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       producto.activo = false;
       producto.actualizadoEn = new Date().toISOString();
       return { ok: true };
-    })
-  );
+    }), "dueno");
 
   r.post("/productos/:id/restaurar", ({ params }) =>
     a.escribir((d) => {
@@ -312,10 +310,9 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       producto.activo = true;
       producto.actualizadoEn = new Date().toISOString();
       return vista(d, producto);
-    })
-  );
+    }), "dueno");
 
-  r.post("/productos/:id/stock", ({ params, cuerpo }) =>
+  r.post("/productos/:id/stock", ({ params, cuerpo, usuario }) =>
     a.escribir((d) => {
       const cantidad = entero(cuerpo.cantidad, 0);
       if (cantidad === 0) throw new Regla("La cantidad no puede ser cero.");
@@ -332,13 +329,14 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         params.id!,
         cantidad,
         motivo,
-        cantidad > 0 ? "entrada" : "salida"
+        cantidad > 0 ? "entrada" : "salida",
+        usuario
       );
       return { stock };
     })
   );
 
-  r.post("/productos/:id/codigo", ({ params, cuerpo }) =>
+  r.post("/productos/:id/codigo", ({ params, cuerpo, usuario }) =>
     a.escribir((d) => {
       const producto = d.productos.find((p) => p.id === params.id);
       if (!producto) throw new Regla("Ese producto ya no existe.");
@@ -353,17 +351,16 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
 
       producto.codigoBarras = codigo;
       producto.actualizadoEn = new Date().toISOString();
-      return vista(d, producto);
+      return vista(d, producto, esDueno(usuario));
     })
   );
 
   // ────────────────────  Acciones sobre muchos  ────────────────────
 
   r.post("/productos/precios/previsualizar", ({ cuerpo }) =>
-    a.leer((d) => previsualizar(d, cuerpo))
-  );
+    a.leer((d) => previsualizar(d, cuerpo)), "dueno");
 
-  r.post("/productos/precios/aplicar", ({ cuerpo }) =>
+  r.post("/productos/precios/aplicar", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const previa = previsualizar(d, cuerpo);
       const porcentaje = Number(cuerpo.porcentaje) || 0;
@@ -380,12 +377,11 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         if (fila.costoNuevo !== null) producto.precioCosto = fila.costoNuevo;
         producto.actualizadoEn = new Date().toISOString();
 
-        registrarPrecio(d, producto, precioAnterior, costoAnterior, motivo);
+        registrarPrecio(d, producto, precioAnterior, costoAnterior, motivo, usuario);
       }
 
       return { cambiados: previa.length };
-    })
-  );
+    }), "dueno");
 
   r.post("/productos/masivo", ({ cuerpo }) =>
     a.escribir((d) => {
@@ -408,10 +404,9 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       }
 
       return { cambiados };
-    })
-  );
+    }), "dueno");
 
-  r.post("/productos/costos", ({ cuerpo }) =>
+  r.post("/productos/costos", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const costos = (cuerpo.costos ?? []) as { id: string; precioCosto: number }[];
       if (costos.length === 0) throw new Regla("No cargaste ningún costo.");
@@ -427,13 +422,12 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
 
         producto.precioCosto = costo === 0 ? null : costo;
         producto.actualizadoEn = new Date().toISOString();
-        registrarPrecio(d, producto, precioAnterior, costoAnterior, "Carga de costos");
+        registrarPrecio(d, producto, precioAnterior, costoAnterior, "Carga de costos", usuario);
         guardados++;
       }
 
       return { guardados };
-    })
-  );
+    }), "dueno");
 
   r.post("/productos/skus/proponer", ({ cuerpo }) =>
     a.leer((d) => {
@@ -442,10 +436,15 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         d.productos.filter((p) => p.sku).map((p) => p.sku!.toLowerCase())
       );
 
+      // `soloSinCodigo` es para las etiquetas: un producto que ya trae el
+      // código de fábrica se imprime con ese, y darle además uno interno
+      // dejaría dos códigos para la misma cosa.
+      const soloSinCodigo = cuerpo.soloSinCodigo === true;
+
       const candidatos = (
         ids.length > 0
           ? d.productos.filter((p) => ids.includes(p.id))
-          : d.productos.filter((p) => p.activo && !p.sku)
+          : d.productos.filter((p) => p.activo && !p.sku && !(soloSinCodigo && p.codigoBarras))
       ).sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
 
       const propuestas: { id: string; nombre: string; sku: string }[] = [];
@@ -464,8 +463,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       }
 
       return propuestas;
-    })
-  );
+    }), "dueno");
 
   r.post("/productos/skus/aplicar", ({ cuerpo }) =>
     a.escribir((d) => {
@@ -488,8 +486,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       }
 
       return { aplicados };
-    })
-  );
+    }), "dueno");
 }
 
 // ──────────────────────────────  Ayudas  ──────────────────────────────
@@ -531,8 +528,14 @@ function colorValido(color: string | undefined): string | null {
 }
 
 /** El producto tal como lo muestra la interfaz, con su categoría y su margen. */
-export function vista(d: BaseDatos, p: Producto) {
+export function vista(d: BaseDatos, p: Producto, verCostos = true) {
   const categoria = p.categoriaId ? d.categorias.find((c) => c.id === p.categoriaId) : undefined;
+
+  // Lo que costó la mercadería y cuánto se gana con ella es del negocio, no de
+  // quien atiende. Se corta ACÁ, que es el único lugar donde un producto se
+  // convierte en JSON: filtrarlo en cada pantalla dejaría el dato viajando por
+  // la red igual, y basta con mirar la respuesta del navegador para leerlo.
+  const costo = verCostos ? p.precioCosto : null;
 
   return {
     id: p.id,
@@ -545,15 +548,15 @@ export function vista(d: BaseDatos, p: Producto) {
     codigoBarras: p.codigoBarras,
     unidadMedida: p.unidadMedida,
     porPeso: p.porPeso,
-    precioCosto: p.precioCosto,
+    precioCosto: costo,
     precioVenta: p.precioVenta,
-    precioMayorista: p.precioMayorista,
+    precioMayorista: verCostos ? p.precioMayorista : null,
     cantidadMayoristaMin: p.cantidadMayoristaMin,
     stock: p.stock,
     stockMinimo: p.stockMinimo,
     activo: p.activo,
-    margen: margenSobreVenta(p.precioVenta, p.precioCosto),
-    margenCosto: margenSobreCosto(p.precioVenta, p.precioCosto),
+    margen: verCostos ? margenSobreVenta(p.precioVenta, p.precioCosto) : null,
+    margenCosto: verCostos ? margenSobreCosto(p.precioVenta, p.precioCosto) : null,
     creadoEn: p.creadoEn,
     actualizadoEn: p.actualizadoEn,
   };

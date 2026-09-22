@@ -112,7 +112,7 @@ export default function PaginaCaja() {
       titulo="Caja"
       descripcion={
         caja
-          ? `Turno ${caja.numero}, abierto ${fechaHora(caja.abiertaEn)}.`
+          ? `Turno ${caja.numero}, abierto ${fechaHora(caja.abiertaEn)}${caja.abrio ? ` por ${caja.abrio}` : ""}.`
           : "Abrí un turno para cobrar por mostrador."
       }
       acciones={
@@ -194,11 +194,19 @@ export default function PaginaCaja() {
                     {items.map((item, indice) => {
                       const excede = item.productoId !== null && item.cantidad > item.stock;
                       return (
+                        // En un teléfono el renglón se parte en dos: el nombre
+                        // ocupa su propia línea y abajo van cantidad e importe.
+                        // De una sola línea no baja de 371px y el mostrador
+                        // tiene 358: quedaba el precio cortado en "$2..." y el
+                        // botón de cobrar fuera de la pantalla.
                         <li
                           key={`${item.productoId}-${indice}`}
-                          className="flex items-center gap-2 border-b border-linea px-3 py-2 last:border-0"
+                          className="flex flex-wrap items-center gap-2 border-b border-linea px-3 py-2.5 last:border-0 sm:py-2"
                         >
-                          <span className="min-w-0 flex-1">
+                          {/* `w-full` es lo que fuerza el corte: empuja al
+                              resto a la línea de abajo sin envolverlo en otro
+                              div. De `sm` para arriba vuelve a ser una línea. */}
+                          <span className="w-full min-w-0 sm:w-auto sm:flex-1">
                             <span className="block truncate">{item.nombre}</span>
                             <span className="block text-chico text-tinta-suave">
                               {plata(item.precio)}
@@ -211,7 +219,7 @@ export default function PaginaCaja() {
                             <button
                               type="button"
                               aria-label="Uno menos"
-                              className="px-2 py-1.5 text-tinta-suave hover:text-tinta"
+                              className="px-3 py-1.5 text-tinta-suave hover:text-tinta sm:px-2"
                               onClick={() =>
                                 setItems((previos) =>
                                   previos
@@ -227,10 +235,16 @@ export default function PaginaCaja() {
                             {/* En gramos si es por peso: es lo que muestra la
                                 balanza, así se teclea lo que se lee sin
                                 convertir nada. El campo es más ancho porque
-                                "1250" no entra donde entraba "2". */}
+                                "1250" no entra donde entraba "2".
+
+                                `min-w-0` no es decorativo: un <input> adentro de
+                                un flex trae `min-width: auto`, que se resuelve
+                                al ancho de unos veinte caracteres —158px acá—
+                                y pisa al `w-16`. Era la mitad de lo que no
+                                dejaba achicar el renglón. */}
                             <input
                               className={cn(
-                                "border-x border-linea-fuerte py-1.5 text-center text-base tabular-nums focus:outline-none",
+                                "min-w-0 border-x border-linea-fuerte py-2.5 text-center text-base tabular-nums focus:outline-none sm:py-1.5",
                                 item.porPeso ? "w-16" : "w-12"
                               )}
                               inputMode="numeric"
@@ -251,7 +265,7 @@ export default function PaginaCaja() {
                             <button
                               type="button"
                               aria-label={item.porPeso ? "Cien gramos más" : "Uno más"}
-                              className="px-2 py-1.5 text-tinta-suave hover:text-tinta"
+                              className="px-3 py-1.5 text-tinta-suave hover:text-tinta sm:px-2"
                               onClick={() =>
                                 setItems((previos) =>
                                   previos.map((i, x) =>
@@ -268,7 +282,10 @@ export default function PaginaCaja() {
 
                           <span
                             className={cn(
-                              "cifra w-24 shrink-0 text-right font-medium",
+                              // `ml-auto` lo manda contra el borde derecho en la
+                              // línea de abajo; en una sola línea no hace nada,
+                              // porque el nombre ya se queda con el espacio.
+                              "cifra ml-auto text-right font-medium sm:w-24 sm:shrink-0",
                               excede && "text-alerta-texto"
                             )}
                           >
@@ -278,7 +295,7 @@ export default function PaginaCaja() {
                           <button
                             type="button"
                             aria-label={`Quitar ${item.nombre}`}
-                            className="p-1 text-tinta-suave hover:text-alerta-texto"
+                            className="p-2.5 text-tinta-suave hover:text-alerta-texto sm:p-1"
                             onClick={() => setItems((previos) => previos.filter((_, x) => x !== indice))}
                           >
                             <Icono nombre="cerrar" tamano={15} />
@@ -543,6 +560,16 @@ function Historial({ cajas }: { cajas: CajaResumen[] }) {
               <span className="block text-chico text-tinta-suave">
                 {fechaHora(caja.abiertaEn)} → {caja.cerradaEn ? fechaHora(caja.cerradaEn) : "abierto"} ·{" "}
                 {numero(caja.ventas)} ventas
+                {/* Abrió uno y cerró otro es lo normal en un negocio con dos
+                    turnos, y es justo lo que hay que poder mirar cuando el
+                    arqueo no cuadra. */}
+                {caja.abrio || caja.cerro ? (
+                  <span className="block">
+                    {caja.abrio ? `abrió ${caja.abrio}` : ""}
+                    {caja.abrio && caja.cerro && caja.cerro !== caja.abrio ? " · " : ""}
+                    {caja.cerro && caja.cerro !== caja.abrio ? `cerró ${caja.cerro}` : ""}
+                  </span>
+                ) : null}
               </span>
             </span>
 

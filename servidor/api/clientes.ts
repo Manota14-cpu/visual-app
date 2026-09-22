@@ -176,8 +176,7 @@ export function rutasClientes(r: Ruteador, a: Almacen): void {
       // viejas apuntando a alguien que no existe.
       cliente.activo = false;
       return { ok: true };
-    })
-  );
+    }), "dueno");
 
   r.post("/clientes/:id/restaurar", ({ params }) =>
     a.escribir((d) => {

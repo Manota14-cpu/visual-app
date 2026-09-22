@@ -181,6 +181,21 @@ export class Almacen {
     return this.copiar();
   }
 
+  /** Las copias que hay en el destino de afuera, de la más nueva a la más vieja. */
+  listarCopiasDe(carpeta: string): string[] {
+    try {
+      const destino = this.carpetaDestino(carpeta);
+      if (!this.destinoDisponible(carpeta) || !fs.existsSync(destino)) return [];
+      return fs
+        .readdirSync(destino)
+        .filter((n) => n.startsWith("datos-") && n.endsWith(".json"))
+        .sort()
+        .reverse();
+    } catch {
+      return [];
+    }
+  }
+
   /** Las copias que hay, de la más nueva a la más vieja. */
   listarCopias(): string[] {
     if (!fs.existsSync(this.carpetaCopias)) return [];
@@ -199,15 +214,24 @@ export class Almacen {
    * valida ANTES de tocar la base — si el archivo está roto, esto lanza y todo
    * queda como estaba.
    */
-  restaurar(nombre: string): { desde: string; respaldoPrevio: string } {
+  restaurar(nombre: string, carpeta?: string): { desde: string; respaldoPrevio: string } {
+    // `carpeta` es el destino de la copia de afuera. Volver desde ahí es el
+    // caso que le da sentido a todo esto: la computadora vieja no arranca, en
+    // la nueva se instala Visual App, se elige el pendrive y se vuelve. Sin
+    // esta rama la copia estaba pero había que meterla a mano en la carpeta
+    // correcta, justo el día en que nadie quiere tocar nada.
+    const desdeAfuera = carpeta !== undefined;
+    const origenCarpeta = desdeAfuera ? this.carpetaDestino(carpeta) : this.carpetaCopias;
+    const disponibles = desdeAfuera ? this.listarCopiasDe(carpeta) : this.listarCopias();
+
     // El nombre viene de la pantalla: se acepta un archivo de la carpeta de
     // copias y nada más. Sin esto, un "../../otra cosa" leería cualquier
     // archivo de la computadora.
-    if (path.basename(nombre) !== nombre || !this.listarCopias().includes(nombre)) {
+    if (path.basename(nombre) !== nombre || !disponibles.includes(nombre)) {
       throw new Regla("Esa copia no existe.");
     }
 
-    const origen = path.join(this.carpetaCopias, nombre);
+    const origen = path.join(origenCarpeta, nombre);
     const texto = fs.readFileSync(origen, "utf8");
 
     let nueva: BaseDatos;
@@ -273,6 +297,206 @@ export class Almacen {
     }
   }
 
+  // ──────────────────  La copia fuera de la computadora  ──────────────────
+  //
+  // Las copias de acá arriba viven al lado del archivo, en el mismo disco. Eso
+  // protege de "me equivoqué y quiero volver atrás", que es lo más frecuente.
+  // No protege del caso que las motiva: el disco que no arranca, la
+  // computadora que se moja, la que se roban. Ahí las copias se van con ella.
+  //
+  // Por eso hay un segundo destino, que elige el negocio: un pendrive que queda
+  // enchufado, la carpeta de OneDrive o Drive que ya usan, una carpeta de la
+  // red. Nosotros no hosteamos nada ni tocamos datos ajenos — el negocio decide
+  // dónde y es dueño de su respaldo.
+
+  /** La subcarpeta donde se dejan las copias adentro del destino elegido. */
+  private carpetaDestino(carpeta: string): string {
+    // En una subcarpeta propia: el destino suele ser la raíz de un pendrive o
+    // de OneDrive, y veinte archivos sueltos ahí adentro son un desastre.
+    return path.join(carpeta, "Visual App", "copias");
+  }
+
+  /**
+   * ¿Está la carpeta que eligió el negocio?
+   *
+   * Se mira la carpeta ELEGIDA, no la subcarpeta de copias. La diferencia
+   * parece menor y no lo es: `mkdir` recursivo crea toda la rama sin chistar,
+   * así que preguntando por la subcarpeta, un pendrive desenchufado se veía
+   * igual que uno recién configurado —"todavía no hay copias"— y encima la
+   * copia siguiente se escribía en una carpeta inventada en el disco de
+   * adentro. Una copia de seguridad guardada en el mismo disco que protege no
+   * es una copia de seguridad, y decía que todo andaba bien.
+   */
+  private destinoDisponible(carpeta: string): boolean {
+    try {
+      return fs.statSync(carpeta).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Explica en castellano por qué no se pudo escribir.
+   *
+   * El mensaje del sistema llega como "ENOENT: no such file or directory" y no
+   * le dice nada a nadie. Y acá importa que se entienda: si la copia de
+   * seguridad falla y el aviso no se entiende, se ignora.
+   */
+  private porQueFallo(error: unknown): string {
+    const codigo = (error as NodeJS.ErrnoException).code;
+    if (codigo === "ENOENT" || codigo === "ENXIO" || codigo === "EHOSTDOWN") {
+      return "No se encuentra la carpeta. Si es un pendrive, fijate que esté enchufado.";
+    }
+    if (codigo === "ENOTDIR") return "Esa ruta no es una carpeta.";
+    if (codigo === "EACCES" || codigo === "EPERM" || codigo === "EROFS") {
+      return "La carpeta no deja escribir.";
+    }
+    if (codigo === "ENOSPC") return "No queda espacio en el destino.";
+    if (codigo === "EBUSY") return "El destino está ocupado por otro programa.";
+    return (error as Error).message;
+  }
+
+  /**
+   * Prueba que se pueda escribir de verdad, y devuelve el error si no.
+   *
+   * Se escribe y se vuelve a leer un archivo de prueba en vez de mirar si la
+   * carpeta existe: una carpeta de red puede existir y no dejar escribir, y un
+   * pendrive protegido contra escritura se monta igual. Vale la pena saberlo
+   * al elegir la carpeta y no seis meses después, el día que hace falta.
+   */
+  probarDestino(carpeta: string): string | null {
+    if (!this.destinoDisponible(carpeta)) {
+      return "No se encuentra esa carpeta. Fijate que esté bien escrita y, si es un pendrive, que esté enchufado.";
+    }
+
+    const prueba = path.join(this.carpetaDestino(carpeta), ".prueba-visual-app");
+    try {
+      fs.mkdirSync(this.carpetaDestino(carpeta), { recursive: true });
+      const testigo = `Visual App ${new Date().toISOString()}`;
+      fs.writeFileSync(prueba, testigo, "utf8");
+      if (fs.readFileSync(prueba, "utf8") !== testigo) {
+        return "La carpeta acepta escribir pero lo guardado no coincide.";
+      }
+      fs.unlinkSync(prueba);
+      return null;
+    } catch (error) {
+      try {
+        fs.unlinkSync(prueba);
+      } catch {
+        // Si tampoco se puede borrar el testigo, el error de arriba ya lo dice.
+      }
+      return this.porQueFallo(error);
+    }
+  }
+
+  /**
+   * Qué hay hoy en el destino. Se mira la carpeta, no un registro de lo hecho.
+   *
+   * Preguntarle a la carpeta es la única respuesta que no puede mentir: un
+   * registro guardado diría "copiado el martes" aunque alguien haya borrado
+   * los archivos o el pendrive sea otro. Y de paso, que la lectura falle ES la
+   * señal de que el destino no está disponible ahora mismo.
+   */
+  estadoResguardo(carpeta: string): {
+    ultima: string | null;
+    copias: number;
+    error: string | null;
+  } {
+    // Que no esté la carpeta elegida es una falla, no un "todavía nada": el
+    // pendrive no está puesto y mientras tanto no hay copia de seguridad.
+    if (!this.destinoDisponible(carpeta)) {
+      return {
+        ultima: null,
+        copias: 0,
+        error: "No se encuentra la carpeta. Si es un pendrive, fijate que esté enchufado.",
+      };
+    }
+
+    // La subcarpeta de copias sí puede faltar sin drama: es la que creamos
+    // nosotros, y que no esté solo quiere decir que todavía no se copió nada.
+    const nombres = this.listarCopiasDe(carpeta);
+    return { ultima: nombres[0] ?? null, copias: nombres.length, error: null };
+  }
+
+  /**
+   * Deja la copia del día en el destino de afuera, si todavía no está.
+   *
+   * Devuelve la ruta escrita, o null si ya había una de hoy. Con `forzar` la
+   * hace igual: quien aprieta el botón a mano quiere una copia de lo de recién,
+   * no que le digan que ya hay una de esta mañana.
+   *
+   * Lanza con un mensaje entendible si el destino no está disponible: quien
+   * llama decide si eso frena algo —no frena nada— pero el motivo tiene que
+   * llegar a la pantalla, porque una copia que falla en silencio es peor que no
+   * tenerla.
+   */
+  resguardar(carpeta: string, forzar = false): string | null {
+    const destino = this.carpetaDestino(carpeta);
+    const sello = this.selloAhora();
+    const hoy = sello.slice(0, 10);
+
+    // La carpeta elegida tiene que estar. Nosotros creamos la subcarpeta de
+    // copias adentro, nunca la raíz: si `mkdir` recursivo la inventa, una copia
+    // con el pendrive afuera termina en el disco de adentro, que es el disco
+    // del que esto viene a proteger.
+    if (!this.destinoDisponible(carpeta)) {
+      throw new Regla("No se encuentra la carpeta. Si es un pendrive, fijate que esté enchufado.");
+    }
+
+    try {
+      fs.mkdirSync(destino, { recursive: true });
+
+      const existentes = fs
+        .readdirSync(destino)
+        .filter((n) => n.startsWith("datos-") && n.endsWith(".json"))
+        .sort();
+      if (!forzar && existentes.some((n) => n.startsWith(`datos-${hoy}`))) return null;
+
+      const texto = JSON.stringify(this.datos);
+
+      // Ningún nombre pisa a otro. El sello llega al segundo, así que dos
+      // copias a mano seguidas caían en el mismo archivo: la segunda borraba a
+      // la primera y la pantalla decía "guardada" las dos veces. Es el mismo
+      // problema que `nombreLibre` resuelve para las copias de adentro.
+      let archivo = path.join(destino, `datos-${sello}.json`);
+      for (let n = 2; fs.existsSync(archivo) && n < 100; n++) {
+        archivo = path.join(destino, `datos-${sello}-${n}.json`);
+      }
+
+      // Se escribe al lado y se renombra, igual que el archivo de trabajo: un
+      // pendrive que se desenchufa a mitad de la copia no puede dejar un
+      // archivo cortado con cara de copia buena.
+      const temporal = `${archivo}.tmp`;
+      fs.writeFileSync(temporal, texto, "utf8");
+      fs.renameSync(temporal, archivo);
+
+      // Y se comprueba que lo que quedó en el destino sea lo que se mandó.
+      // En un disco extraíble o de red, que la escritura no tire error no
+      // alcanza para saber que los bytes llegaron.
+      const escrito = fs.statSync(archivo).size;
+      if (escrito !== Buffer.byteLength(texto, "utf8")) {
+        throw new Error(`La copia quedó incompleta (${escrito} bytes de ${texto.length}).`);
+      }
+
+      // Podar acá también: un pendrive de 4 GB con una copia por día y nada
+      // que las borre se llena, y ahí dejan de entrar las nuevas.
+      for (const viejo of [...existentes, path.basename(archivo)]
+        .sort()
+        .reverse()
+        .slice(COPIAS_A_GUARDAR)) {
+        try {
+          fs.unlinkSync(path.join(destino, viejo));
+        } catch {
+          // Una copia vieja que no se deja borrar no invalida la nueva.
+        }
+      }
+
+      return archivo;
+    } catch (error) {
+      throw new Regla(this.porQueFallo(error));
+    }
+  }
+
   tamano(): number {
     try {
       return fs.statSync(this.archivo).size;
@@ -306,6 +530,51 @@ export class Almacen {
 function normalizar(d: BaseDatos): BaseDatos {
   d.cobrosFiado ??= [];
 
+  // Una base guardada antes de que existiera la copia de afuera no trae el
+  // campo. Queda en null, que es "todavía nadie eligió carpeta".
+  d.config.resguardo ??= null;
+
+  // Una base anterior a esto nunca dio permiso para salir a la red. Apagado.
+  d.config.enRed ??= false;
+
+  // Y una anterior a que hubiera usuarios arranca sin ninguno, que es
+  // exactamente lo que corresponde: el negocio que ya la venía usando sigue
+  // entrando sin contraseña hasta que decida crear el primero.
+  d.proveedores ??= [];
+  d.compras ??= [];
+  d.vencimientos ??= [];
+  d.recuentos ??= [];
+  d.usuarios ??= [];
+  d.sesiones ??= [];
+
+  // Los gastos viejos traen el proveedor escrito a mano y ninguno apunta a un
+  // proveedor de verdad. Queda en null: son gastos, no pagos a una cuenta.
+  for (const g of d.gastos) g.proveedorId ??= null;
+
+  // Y todo lo que pasó antes de que hubiera usuarios no tiene a quién
+  // atribuirse. Queda explícito en null para que las pantallas no tengan que
+  // preguntarse si el campo está o si es que no se sabe: no se sabe.
+  for (const m of d.movimientos) {
+    m.usuarioId ??= null;
+    m.usuario ??= null;
+  }
+  for (const p of d.pedidos) {
+    p.usuarioId ??= null;
+    p.usuario ??= null;
+    // Antes no existían los descuentos: nada de lo cargado tiene uno.
+    p.descuento ??= 0;
+  }
+  for (const c of d.cambiosPrecio) {
+    c.usuarioId ??= null;
+    c.usuario ??= null;
+  }
+  for (const c of d.cajas) {
+    c.abrioId ??= null;
+    c.abrio ??= null;
+    c.cerroId ??= null;
+    c.cerro ??= null;
+  }
+
   // Antes no existía la venta por peso: todo lo cargado hasta ahora es por
   // unidad. Se escribe explícito en vez de dejarlo indefinido, para que el
   // resto del programa no tenga que preguntarse si el campo está.
@@ -323,7 +592,7 @@ export function inicial(): BaseDatos {
 
   return {
     version: 1,
-    config: { negocio: "Mi negocio", detalle: null, creadaEn: ahora },
+    config: { negocio: "Mi negocio", detalle: null, resguardo: null, enRed: false, creadaEn: ahora },
     categorias: [{ id: nuevoId(), nombre: "General", color: "#98989D", creadaEn: ahora }],
     productos: [],
     movimientos: [],
@@ -333,6 +602,12 @@ export function inicial(): BaseDatos {
     gastos: [],
     cajas: [],
     cobrosFiado: [],
+    proveedores: [],
+    compras: [],
+    vencimientos: [],
+    recuentos: [],
+    usuarios: [],
+    sesiones: [],
     contadores: { pedido: 0, caja: 0 },
   };
 }

@@ -1,13 +1,15 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { inicial, nuevoId, Regla, type Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
 import { lanzar } from "../lanzar.ts";
+import { direccionesDeRed } from "../red.ts";
 import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../reglas.ts";
 import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
-import { latir } from "../vida.ts";
+import { estaEscuchandoEnRed, latir, puertoDeEscucha } from "../vida.ts";
 
-export const VERSION = "1.6.0";
+export const VERSION = "2.0.0";
 
 /**
  * El archivo de datos y lo que se puede hacer con él.
@@ -17,27 +19,45 @@ export const VERSION = "1.6.0";
  * copiar y llevarse en un pendrive.
  */
 export function rutasSistema(r: Ruteador, a: Almacen): void {
-  r.get("/sistema", () =>
-    a.leer((d) => ({
-      archivo: a.archivo,
-      carpeta: path.dirname(a.archivo),
-      carpetaCopias: a.carpetaCopias,
-      tamano: a.tamano(),
-      version: d.version,
-      config: d.config,
-      programa: VERSION,
-      conteos: {
-        categorias: d.categorias.length,
-        productos: d.productos.length,
-        movimientos: d.movimientos.length,
-        pedidos: d.pedidos.length,
-        clientes: d.clientes.length,
-        gastos: d.gastos.length,
-        cajas: d.cajas.length,
-        cambiosPrecio: d.cambiosPrecio.length,
-      },
-      copias: copias(a),
-    }))
+  /**
+   * Dónde vive la información y cómo viene.
+   *
+   * Lo pide toda pantalla, porque el nombre del negocio va arriba de la
+   * columna. Para un empleado eso es lo único que vuelve: dónde está el
+   * archivo, cuánto hay cargado de cada cosa y cómo viene la copia de
+   * seguridad son cuentas del negocio, no de quien atiende el mostrador.
+   */
+  r.get("/sistema", ({ usuario }) =>
+    a.leer((d) => {
+      const basico = {
+        programa: VERSION,
+        config: { negocio: d.config.negocio, detalle: d.config.detalle },
+      };
+
+      if (usuario && usuario.rol !== "dueno") return basico;
+
+      return {
+        ...basico,
+        archivo: a.archivo,
+        carpeta: path.dirname(a.archivo),
+        carpetaCopias: a.carpetaCopias,
+        tamano: a.tamano(),
+        version: d.version,
+        config: d.config,
+        conteos: {
+          categorias: d.categorias.length,
+          productos: d.productos.length,
+          movimientos: d.movimientos.length,
+          pedidos: d.pedidos.length,
+          clientes: d.clientes.length,
+          gastos: d.gastos.length,
+          cajas: d.cajas.length,
+          cambiosPrecio: d.cambiosPrecio.length,
+        },
+        copias: copias(a),
+        resguardo: resguardo(a, d.config.resguardo),
+      };
+    })
   );
 
   r.put("/sistema/config", ({ cuerpo }) =>
@@ -49,13 +69,12 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
       );
       d.config.detalle = recortar(cuerpo.detalle as string, 160);
       return d.config;
-    })
-  );
+    }), "dueno");
 
   r.post("/sistema/copia", () => {
     const ruta = a.copiar();
     return { archivo: ruta, nombre: path.basename(ruta) };
-  });
+  }, "dueno");
 
   /**
    * Vuelve a una copia guardada.
@@ -77,8 +96,112 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
     const nombre = String(cuerpo.nombre ?? "").trim();
     if (!nombre) throw new Regla("Elegí una copia.");
 
+    // `afuera` dice que la copia está en el pendrive y no en esta computadora.
+    // Es el camino de la computadora nueva: instalar, elegir la carpeta donde
+    // estaba la copia, y volver.
+    if (cuerpo.afuera === true) {
+      const carpeta = a.leer((d) => d.config.resguardo);
+      if (!carpeta) throw new Regla("No hay ninguna carpeta de copia de seguridad elegida.");
+      return a.restaurar(nombre, carpeta);
+    }
+
     return a.restaurar(nombre);
-  });
+  }, "dueno");
+
+  /**
+   * Elige la carpeta de afuera donde dejar la copia de cada día, o la saca.
+   *
+   * La carpeta se PRUEBA antes de guardarla: se escribe y se vuelve a leer un
+   * archivo de prueba. Aceptar una ruta mal escrita y descubrirlo recién el
+   * día que hace falta la copia sería exactamente el problema que esto viene a
+   * resolver.
+   *
+   * Y se hace la primera copia en el momento, para que quien la configura vea
+   * el archivo aparecer en su pendrive en vez de confiar en que mañana pase.
+   */
+  r.put("/sistema/resguardo", ({ cuerpo }) => {
+    const carpeta = recortar(cuerpo.carpeta as string, 400);
+
+    if (!carpeta) {
+      a.escribir((d) => {
+        d.config.resguardo = null;
+      });
+      return { resguardo: null, copia: null };
+    }
+
+    const problema = a.probarDestino(carpeta);
+    if (problema) throw new Regla(problema);
+
+    a.escribir((d) => {
+      d.config.resguardo = carpeta;
+    });
+
+    return { resguardo: carpeta, copia: a.resguardar(carpeta) };
+  }, "dueno");
+
+  /**
+   * Abre el buscador de carpetas de Windows y devuelve la que se eligió.
+   *
+   * Una página web no puede mirar el disco, así que la alternativa era que el
+   * negocio escriba la ruta a mano. Escribir `C:\Users\...\OneDrive\Documentos`
+   * sin equivocarse no es razonable para pedírselo a nadie, y una ruta mal
+   * escrita acá significa creer que hay copia de seguridad cuando no la hay.
+   *
+   * El cuadro lo abre PowerShell, que en Windows ya viene y está firmado. En
+   * cualquier otro sistema no hay cuadro y queda el campo para escribirla, que
+   * sigue funcionando.
+   */
+  r.post("/sistema/elegir-carpeta", async () => {
+    if (process.platform !== "win32") {
+      throw new Regla("Escribí la ruta de la carpeta a mano.");
+    }
+    return { carpeta: await elegirCarpeta() };
+  }, "dueno");
+
+  /**
+   * Prender o apagar el acceso desde el celular.
+   *
+   * Sin usuarios creados no se puede prender, y no es una formalidad: abrir el
+   * programa al wifi del local sin contraseña deja entrar a cualquiera que
+   * esté conectado, incluido un cliente si el local tiene wifi para clientes.
+   *
+   * El cambio pide cerrar y abrir el programa. El servidor ya está escuchando
+   * donde arrancó, y cambiar eso en caliente significaría soltar la conexión
+   * de quien esté cobrando en ese momento.
+   */
+  r.put(
+    "/sistema/red",
+    ({ cuerpo }) => {
+      const prender = cuerpo.enRed === true;
+
+      if (prender && !a.leer((d) => d.usuarios.some((u) => u.activo))) {
+        throw new Regla(
+          "Primero creá usuarios con contraseña. Sin eso, cualquiera conectado al wifi entraría."
+        );
+      }
+
+      a.escribir((d) => {
+        d.config.enRed = prender;
+      });
+
+      return estadoDeRed(a);
+    },
+    "dueno"
+  );
+
+  /** Por dónde se llega desde el local, para mostrarlo y armar el QR. */
+  r.get("/sistema/red", () => estadoDeRed(a), "dueno");
+
+  /** Fuerza la copia de afuera ahora, sin esperar a mañana. */
+  r.post("/sistema/resguardo/copia", () => {
+    const carpeta = a.leer((d) => d.config.resguardo);
+    if (!carpeta) throw new Regla("Todavía no elegiste una carpeta para la copia de seguridad.");
+
+    // `resguardar` devuelve null si la de hoy ya estaba. Acá se pidió a mano,
+    // así que se hace igual: quien aprieta el botón quiere una copia de lo de
+    // recién, no que le digan que ya hay una de esta mañana.
+    return { archivo: a.resguardar(carpeta, true) };
+  }, "dueno");
 
   r.post("/sistema/carpeta", () => {
     // Abrir el explorador en la carpeta de datos es la forma más simple de que
@@ -91,7 +214,7 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
     else lanzar("xdg-open", [carpeta]);
 
     return { carpeta };
-  });
+  }, "dueno");
 
   r.post("/sistema/vaciar", ({ cuerpo }) => {
     // Vaciar la base borra todo lo cargado. Se pide escribir la palabra
@@ -102,14 +225,14 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
 
     a.vaciar();
     return { ok: true };
-  });
+  }, "dueno");
 
   // La ventana avisa cada veinte segundos que sigue abierta. Sin esto, el
   // servidor no tendría forma de saber que ya nadie lo está mirando.
   r.post("/sistema/latido", () => {
     latir();
     return { ok: true };
-  });
+  }, "libre");
 
   r.post("/sistema/apagar", () => {
     // Se contesta primero y se apaga después: si el proceso se fuera acá mismo,
@@ -125,7 +248,147 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
 
     a.reemplazar(armarEjemplo());
     return { ok: true };
+  }, "dueno");
+}
+
+/**
+ * Cómo viene el acceso desde el celular.
+ *
+ * `direcciones` puede traer más de una —wifi y cable a la vez es lo normal— y
+ * no hay forma de saber cuál va a usar el celular. Se muestran todas.
+ */
+function estadoDeRed(a: Almacen) {
+  const enRed = a.leer((d) => d.config.enRed);
+  const hayUsuarios = a.leer((d) => d.usuarios.some((u) => u.activo));
+
+  return {
+    enRed,
+    hayUsuarios,
+    puerto: puertoDeEscucha(),
+    direcciones: enRed ? direccionesDeRed() : [],
+    // Lo que de verdad está escuchando ahora, que puede no coincidir con lo
+    // configurado: el cambio recién se aplica al reabrir el programa.
+    escuchandoEnRed: estaEscuchandoEnRed(),
+  };
+}
+
+/**
+ * El cuadro de "elegir carpeta" de Windows, por PowerShell.
+ *
+ * Devuelve la ruta, o null si la persona cerró el cuadro sin elegir — que no es
+ * un error, es cambiar de opinión.
+ *
+ * Se usa `spawn` y no `lanzar`, porque acá sí hace falta esperar la respuesta.
+ * Y con tiempo límite: el cuadro es una ventana, y una ventana que se queda
+ * abierta y olvidada dejaría este pedido colgado para siempre.
+ */
+function elegirCarpeta(): Promise<string | null> {
+  const guion = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
+    "$d.Description = 'Elegí dónde dejar la copia de seguridad de Visual App'",
+    // Un pendrive o un disco externo son el destino más probable, así que el
+    // cuadro arranca en "Esta PC" y no en Documentos.
+    "$d.RootFolder = [System.Environment+SpecialFolder]::MyComputer",
+    "$d.ShowNewFolderButton = $true",
+    "if ($d.ShowDialog() -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }",
+  ].join("; ");
+
+  return new Promise((resolver) => {
+    const hijo = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", guion],
+      { windowsHide: true }
+    );
+
+    let salida = "";
+    hijo.stdout.on("data", (trozo: Buffer) => {
+      salida += trozo.toString("utf8");
+    });
+
+    const reloj = setTimeout(() => {
+      hijo.kill();
+      resolver(null);
+    }, 120_000);
+
+    const terminar = (ruta: string | null) => {
+      clearTimeout(reloj);
+      resolver(ruta);
+    };
+
+    hijo.on("close", () => terminar(salida.trim() || null));
+    // Que no se pueda abrir el cuadro no puede voltear el servidor: queda el
+    // campo para escribir la ruta.
+    hijo.on("error", () => terminar(null));
   });
+}
+
+/**
+ * Cómo viene la copia de afuera: cuándo fue la última y si el destino responde.
+ *
+ * `dias` es lo que la pantalla necesita para decidir si avisar. Se cuenta
+ * contra la fecha que trae el nombre del archivo, que es la única que sobrevive
+ * a que alguien copie los archivos de un pendrive a otro.
+ */
+function resguardo(a: Almacen, carpeta: string | null) {
+  if (!carpeta) return { carpeta: null, ultima: null, dias: null, copias: 0, error: null };
+
+  const estado = a.estadoResguardo(carpeta);
+
+  // datos-aaaa-mm-dd-hhmmss.json
+  const fecha = estado.ultima?.slice(6, 16) ?? null;
+  const dias = fecha ? diasDesde(fecha) : null;
+
+  return {
+    carpeta,
+    ultima: fecha,
+    dias,
+    copias: estado.copias,
+    error: estado.error,
+    // Los nombres, para poder ofrecer volver a una sin tener que abrir la
+    // carpeta y copiar archivos a mano.
+    archivos: a.listarCopiasDe(carpeta).map((nombre) => ({
+      nombre,
+      fecha: fechaDeCopia(nombre),
+    })),
+  };
+}
+
+/**
+ * La fecha que trae el nombre de la copia, en ISO.
+ *
+ * Se lee del nombre y no de la fecha del archivo: copiar un pendrive a otro, o
+ * bajarlo de la nube, le pone la fecha de la copia y no la del día que se
+ * guardó. El nombre viaja con el archivo.
+ */
+function fechaDeCopia(nombre: string): string | null {
+  // datos-aaaa-mm-dd-hhmmss.json
+  const partes = /^datos-(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(nombre);
+  if (!partes) return null;
+
+  const [a, m, d, h, min, seg] = partes.slice(1).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  return new Date(a, m - 1, d, h, min, seg).toISOString();
+}
+
+/** Días entre una fecha aaaa-mm-dd y hoy, contando en días del calendario. */
+function diasDesde(fecha: string): number | null {
+  const [a, m, d] = fecha.split("-").map(Number);
+  if (!a || !m || !d) return null;
+
+  // A mediodía las dos: así el cambio de horario de verano —una hora de más o
+  // de menos— no corre la cuenta un día entero.
+  const entonces = new Date(a, m - 1, d, 12).getTime();
+  const hoy = new Date();
+  const ahora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 12).getTime();
+
+  return Math.round((ahora - entonces) / 86_400_000);
 }
 
 /** Las copias que ya se hicieron, de la más nueva a la más vieja. */
@@ -158,7 +421,7 @@ function armarEjemplo(): BaseDatos {
 
   const categorias = [
     ["Bandejas", "#5E5CE6"],
-    ["Vasos", "#0A84FF"],
+    ["Vasos", "#0050CE"],
     ["Bolsas", "#30D158"],
     ["Servilletas", "#FF9F0A"],
   ].map(([nombre, color]) => ({
@@ -242,6 +505,10 @@ function armarEjemplo(): BaseDatos {
     fondo: 20000,
     contado: null,
     nota: "Turno de ejemplo",
+    abrioId: null,
+    abrio: null,
+    cerroId: null,
+    cerro: null,
     abiertaEn: hace(2.4),
     cerradaEn: hace(2),
     movimientos: [],
@@ -277,6 +544,7 @@ function armarEjemplo(): BaseDatos {
       monto,
       metodoPago: categoria === "mercaderia" ? "transferencia" : "efectivo",
       proveedor: null,
+      proveedorId: null,
       comprobante: null,
       notas: null,
       cajaId: null,
@@ -303,6 +571,9 @@ function vender(
     estado: "entregado",
     nombre: cliente?.nombre ?? "Mostrador",
     clienteId: cliente?.id ?? null,
+    usuarioId: null,
+    usuario: null,
+    descuento: 0,
     notas: null,
     total: 0,
     metodoPago: metodo,

@@ -151,6 +151,7 @@ function Ventas() {
                           {venta.cajaNumero ? ` · turno ${venta.cajaNumero}` : ""}
                           {venta.items.length > 0 ? ` · ${venta.items[0]!.nombre}` : ""}
                           {venta.items.length > 1 ? ` +${venta.items.length - 1}` : ""}
+                          {venta.usuario ? ` · ${venta.usuario}` : ""}
                         </span>
                       </td>
                       <td className="whitespace-nowrap text-tinta-suave">{fechaHora(venta.creadoEn)}</td>

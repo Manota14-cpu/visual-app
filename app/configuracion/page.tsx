@@ -1,13 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Marco } from "@/components/marco";
 import { Boton, Campo, Cargando, Dialogo, Etiqueta, Hoja } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
+import { useSesion } from "@/lib/sesion";
 import { api, ErrorApi } from "@/lib/api";
 import { fechaHora, numero, tamano } from "@/lib/formato";
 import type { Actualizacion, Sistema } from "@/lib/tipos";
+import { Usuarios } from "./usuarios";
+import { AccesoDesdeElCelular } from "./red";
+
+/**
+ * Las pestañas.
+ *
+ * Eran ocho tarjetas en una sola columna de un metro y medio: para llegar a la
+ * copia de seguridad había que pasar por los usuarios, el nombre del negocio y
+ * el archivo. Separadas por tema, cada pestaña entra en una pantalla y la que
+ * se busca está a un clic.
+ */
+const PESTANAS = [
+  { id: "negocio", nombre: "Negocio" },
+  { id: "usuarios", nombre: "Usuarios" },
+  { id: "datos", nombre: "Copias y datos" },
+  { id: "programa", nombre: "Programa" },
+] as const;
+
+type IdPestana = (typeof PESTANAS)[number]["id"];
 
 /**
  * Dónde vive la información y qué se puede hacer con ella.
@@ -18,6 +39,7 @@ import type { Actualizacion, Sistema } from "@/lib/tipos";
  */
 export default function PaginaConfiguracion() {
   const avisos = useAvisos();
+  const { esDueno } = useSesion();
   const { datos, cargando, recargar } = useDatos<Sistema>("/sistema");
 
   const [copiando, setCopiando] = useState(false);
@@ -26,8 +48,11 @@ export default function PaginaConfiguracion() {
   const [apagando, setApagando] = useState(false);
   // La copia que se está por restaurar, y la palabra que lo confirma.
   const [volviendoA, setVolviendoA] = useState<string | null>(null);
+  // Si la copia elegida esta en el pendrive y no en esta computadora.
+  const [volviendoDeAfuera, setVolviendoDeAfuera] = useState(false);
   const [confirmaVolver, setConfirmaVolver] = useState("");
   const [restaurando, setRestaurando] = useState(false);
+  const [pestana, setPestana] = useState<IdPestana>("negocio");
 
   /**
    * Apaga el programa y cierra la ventana.
@@ -75,9 +100,11 @@ export default function PaginaConfiguracion() {
       const r = await api.post<{ respaldoPrevio: string }>("/sistema/restaurar", {
         nombre: volviendoA,
         confirmacion: confirmaVolver,
+        afuera: volviendoDeAfuera,
       });
       avisos.exito(`Se volvió a ${volviendoA}. Lo anterior quedó guardado en ${r.respaldoPrevio}.`);
       setVolviendoA(null);
+      setVolviendoDeAfuera(false);
       setConfirmaVolver("");
       await recargar();
     } catch (e) {
@@ -118,7 +145,7 @@ export default function PaginaConfiguracion() {
   }
 
   const sinDatos =
-    datos !== null &&
+    datos?.conteos !== undefined &&
     datos.conteos.productos === 0 &&
     datos.conteos.pedidos === 0 &&
     datos.conteos.gastos === 0;
@@ -127,149 +154,214 @@ export default function PaginaConfiguracion() {
     <Marco titulo="Configuración" descripcion="El negocio, el archivo de datos y sus copias.">
       {cargando && !datos && <Cargando filas={6} />}
 
-      {datos && (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <FormularioNegocio config={datos.config} onGuardado={() => void recargar()} />
+      {/* Un empleado puede escribir la dirección y llegar hasta acá. No ve
+          nada: el servidor ni siquiera le manda los datos, así que esto es
+          para explicarlo en vez de mostrar una pantalla vacía y rota. */}
+      {datos && !esDueno && (
+        <Hoja titulo="Configuración">
+          <p className="text-base text-tinta-suave">
+            Esta pantalla es del dueño: acá se configura el negocio, la copia de seguridad y quién
+            usa el programa. Si necesitás algo de acá, pedíselo.
+          </p>
+        </Hoja>
+      )}
 
-          <Hoja
-            titulo="Archivo de datos"
-            accion={<Etiqueta tono="dato">{tamano(datos.tamano)}</Etiqueta>}
+      {/* Todo esto solo llega cuando el que mira es el dueño, así que se
+          comprueba una vez y adentro se usa con confianza. */}
+      {datos && esDueno && datos.conteos && datos.copias && datos.resguardo && (
+        <div className="flex flex-col gap-4">
+          <Pestanas
+            actual={pestana}
+            onCambiar={setPestana}
+            // Un punto sobre "Copias y datos" cuando la copia de afuera no está
+            // funcionando: es lo único de esta pantalla que no puede esperar a
+            // que alguien entre a esa pestaña por casualidad.
+            conAviso={!datos.resguardo.carpeta || datos.resguardo.error ? ["datos"] : []}
+          />
+
+          <div
+            role="tabpanel"
+            id={`panel-${pestana}`}
+            aria-labelledby={`pestana-${pestana}`}
+            className="grid items-start gap-4 xl:grid-cols-2"
           >
-            <div className="flex flex-col gap-4">
-              <div>
-                <p className="etiqueta-campo">Dónde está</p>
-                <p className="mt-1 break-all rounded border border-linea bg-lienzo px-3 py-2 font-mono text-chico">
-                  {datos.archivo}
-                </p>
-                <p className="mt-2 text-chico text-tinta-suave">
-                  Es un archivo de texto común. Copiarlo a un pendrive es todo el respaldo que hace
-                  falta; ponerlo en otra computadora con Visual App instalado es toda la mudanza.
-                </p>
-              </div>
-
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-base sm:grid-cols-3">
-                <Conteo rotulo="Productos" valor={datos.conteos.productos} />
-                <Conteo rotulo="Categorías" valor={datos.conteos.categorias} />
-                <Conteo rotulo="Movimientos" valor={datos.conteos.movimientos} />
-                <Conteo rotulo="Ventas" valor={datos.conteos.pedidos} />
-                <Conteo rotulo="Clientes" valor={datos.conteos.clientes} />
-                <Conteo rotulo="Gastos" valor={datos.conteos.gastos} />
-                <Conteo rotulo="Turnos de caja" valor={datos.conteos.cajas} />
-                <Conteo rotulo="Cambios de precio" valor={datos.conteos.cambiosPrecio} />
-              </dl>
-
-              <div className="flex flex-wrap gap-2">
-                <Boton icono="copiar" onClick={() => void copiar()} disabled={copiando}>
-                  {copiando ? "Copiando…" : "Hacer una copia"}
-                </Boton>
-                <Boton icono="carpeta" onClick={() => void abrirCarpeta()}>
-                  Abrir la carpeta
-                </Boton>
-              </div>
-            </div>
-          </Hoja>
-
-          <Hoja titulo="Copias guardadas" cuerpo="p-0">
-            {datos.copias.length === 0 ? (
-              <p className="px-4 py-6 text-center text-base text-tinta-suave">
-                Todavía no hay ninguna copia.
-              </p>
-            ) : (
+            {pestana === "negocio" && (
               <>
-                <p className="border-b border-linea px-4 py-2.5 text-chico text-tinta-suave">
-                  Se guarda una copia sola al abrir el programa cada día y otra al cerrar cada
-                  turno de caja. Se conservan las últimas veinte.
-                </p>
-                <ul>
-                  {datos.copias.map((copia) => (
-                    <li
-                      key={copia.nombre}
-                      className="flex items-center justify-between gap-3 border-b border-linea px-4 py-2.5 last:border-0"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-mono text-chico">{copia.nombre}</span>
-                        <span className="block text-chico text-tinta-suave">
-                          {fechaHora(copia.fecha)} · {tamano(copia.tamano)}
-                        </span>
-                      </span>
-                      <Boton
-                        icono="recargar"
-                        onClick={() => {
-                          setVolviendoA(copia.nombre);
-                          setConfirmaVolver("");
-                        }}
-                      >
-                        Volver a esta
-                      </Boton>
-                    </li>
-                  ))}
-                </ul>
+                <FormularioNegocio config={datos.config} onGuardado={() => void recargar()} />
               </>
             )}
-          </Hoja>
 
-          <Hoja titulo="Empezar de nuevo">
-            <div className="flex flex-col gap-4">
-              {sinDatos && (
-                <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo p-3">
-                  <p className="text-base">
-                    La base está vacía. Se pueden cargar datos de ejemplo para mirar cómo funciona
-                    todo —un catálogo, un turno de caja cerrado, clientes y gastos— y borrarlos
-                    después.
-                  </p>
-                  <div>
-                    <Boton onClick={() => void cargarEjemplo()}>Cargar datos de ejemplo</Boton>
+            {pestana === "usuarios" && (
+              <>
+                <Usuarios />
+
+                <AccesoDesdeElCelular />
+              </>
+            )}
+
+            {pestana === "datos" && (
+              <>
+                <CopiaDeSeguridad
+                  estado={datos.resguardo}
+                  onCambio={() => void recargar()}
+                  onVolverA={(nombre) => {
+                    setVolviendoA(nombre);
+                    setVolviendoDeAfuera(true);
+                    setConfirmaVolver("");
+                  }}
+                />
+
+                <Hoja titulo="Copias guardadas" cuerpo="p-0">
+                  {datos.copias.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-base text-tinta-suave">
+                      Todavía no hay ninguna copia.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="border-b border-linea px-4 py-2.5 text-chico text-tinta-suave">
+                        Se guarda una copia sola al abrir el programa cada día y otra al cerrar cada
+                        turno de caja. Se conservan las últimas veinte.
+                      </p>
+                      <ul>
+                        {datos.copias.map((copia) => (
+                          <li
+                            key={copia.nombre}
+                            className="flex items-center justify-between gap-3 border-b border-linea px-4 py-2.5 last:border-0"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-mono text-chico">{copia.nombre}</span>
+                              <span className="block text-chico text-tinta-suave">
+                                {fechaHora(copia.fecha)} · {tamano(copia.tamano)}
+                              </span>
+                            </span>
+                            <Boton
+                              icono="recargar"
+                              onClick={() => {
+                                setVolviendoA(copia.nombre);
+                                setVolviendoDeAfuera(false);
+                                setConfirmaVolver("");
+                              }}
+                            >
+                              Volver a esta
+                            </Boton>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </Hoja>
+
+                <Hoja
+                  titulo="Archivo de datos"
+                  accion={<Etiqueta tono="dato">{tamano(datos.tamano ?? 0)}</Etiqueta>}
+                >
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <p className="etiqueta-campo">Dónde está</p>
+                      <p className="mt-1 break-all rounded border border-linea bg-lienzo px-3 py-2 font-mono text-chico">
+                        {datos.archivo}
+                      </p>
+                      <p className="mt-2 text-chico text-tinta-suave">
+                        Es un archivo de texto común. Copiarlo a un pendrive es todo el respaldo que hace
+                        falta; ponerlo en otra computadora con Visual App instalado es toda la mudanza.
+                      </p>
+                    </div>
+
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-base sm:grid-cols-3">
+                      <Conteo rotulo="Productos" valor={datos.conteos.productos} />
+                      <Conteo rotulo="Categorías" valor={datos.conteos.categorias} />
+                      <Conteo rotulo="Movimientos" valor={datos.conteos.movimientos} />
+                      <Conteo rotulo="Ventas" valor={datos.conteos.pedidos} />
+                      <Conteo rotulo="Clientes" valor={datos.conteos.clientes} />
+                      <Conteo rotulo="Gastos" valor={datos.conteos.gastos} />
+                      <Conteo rotulo="Turnos de caja" valor={datos.conteos.cajas} />
+                      <Conteo rotulo="Cambios de precio" valor={datos.conteos.cambiosPrecio} />
+                    </dl>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Boton icono="copiar" onClick={() => void copiar()} disabled={copiando}>
+                        {copiando ? "Copiando…" : "Hacer una copia"}
+                      </Boton>
+                      <Boton icono="carpeta" onClick={() => void abrirCarpeta()}>
+                        Abrir la carpeta
+                      </Boton>
+                    </div>
                   </div>
-                </div>
-              )}
+                </Hoja>
 
-              <div className="flex flex-col gap-2">
-                <p className="text-base text-tinta-suave">
-                  Vaciar borra todo: catálogo, ventas, clientes, gastos y turnos. Antes se guarda
-                  una copia en la carpeta de copias.
-                </p>
-                <div>
-                  <Boton tono="peligro" icono="borrar" onClick={() => setVaciando(true)}>
-                    Vaciar la base
-                  </Boton>
-                </div>
-              </div>
+                <Hoja titulo="Empezar de nuevo">
+                  <div className="flex flex-col gap-4">
+                    {sinDatos && (
+                      <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo p-3">
+                        <p className="text-base">
+                          La base está vacía. Se pueden cargar datos de ejemplo para mirar cómo funciona
+                          todo —un catálogo, un turno de caja cerrado, clientes y gastos— y borrarlos
+                          después.
+                        </p>
+                        <div>
+                          <Boton onClick={() => void cargarEjemplo()}>Cargar datos de ejemplo</Boton>
+                        </div>
+                      </div>
+                    )}
 
-              <div className="flex flex-col gap-2 border-t border-linea pt-4">
-                <p className="text-base text-tinta-suave">
-                  Cerrar la ventana también apaga Visual App, pero tarda un minuto en darse cuenta.
-                  Con este botón se apaga en el momento.
-                </p>
-                <div>
-                  <Boton icono="salir" onClick={() => void apagar()} disabled={apagando}>
-                    {apagando ? "Cerrando…" : "Cerrar Visual App"}
-                  </Boton>
-                </div>
-              </div>
+                    <div className="flex flex-col gap-2">
+                      <p className="text-base text-tinta-suave">
+                        Vaciar borra todo: catálogo, ventas, clientes, gastos y turnos. Antes se guarda
+                        una copia en la carpeta de copias.
+                      </p>
+                      <div>
+                        <Boton tono="peligro" icono="borrar" onClick={() => setVaciando(true)}>
+                          Vaciar la base
+                        </Boton>
+                      </div>
+                    </div>
+                  </div>
+                </Hoja>
+              </>
+            )}
 
-              <div className="border-t border-linea pt-3 text-chico text-tinta-suave">
-                <p>Visual App {datos.programa} · formato de datos v{datos.version}</p>
-                <p className="mt-1">
-                  © {new Date().getFullYear()} Visual Solution. Todos los derechos reservados.
-                </p>
-                <p className="mt-0.5">
-                  {/* Se abre afuera a propósito: la aplicación vive en una ventana sin
-                      barra de direcciones, y sin esto el sitio la reemplazaría y no
-                      habría cómo volver. */}
-                  <a
-                    href="https://visual-solution.vercel.app"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-acento hover:underline"
-                  >
-                    visual-solution.vercel.app
-                  </a>
-                </p>
-              </div>
-            </div>
-          </Hoja>
+            {pestana === "programa" && (
+              <>
+                <Actualizaciones />
 
-          <Actualizaciones />
+                <Hoja titulo="Visual App">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-base text-tinta-suave">
+                        Cerrar la ventana también apaga Visual App, pero tarda un minuto en darse cuenta.
+                        Con este botón se apaga en el momento.
+                      </p>
+                      <div>
+                        <Boton icono="salir" onClick={() => void apagar()} disabled={apagando}>
+                          {apagando ? "Cerrando…" : "Cerrar Visual App"}
+                        </Boton>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-linea pt-3 text-chico text-tinta-suave">
+                      <p>Visual App {datos.programa} · formato de datos v{datos.version}</p>
+                      <p className="mt-1">
+                        © {new Date().getFullYear()} Visual Solution. Todos los derechos reservados.
+                      </p>
+                      <p className="mt-0.5">
+                        {/* Se abre afuera a propósito: la aplicación vive en una ventana sin
+                            barra de direcciones, y sin esto el sitio la reemplazaría y no
+                            habría cómo volver. */}
+                        <a
+                          href="https://visual-solution.vercel.app"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-acento hover:underline"
+                        >
+                          visual-solution.vercel.app
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                </Hoja>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -343,6 +435,88 @@ export default function PaginaConfiguracion() {
         </div>
       </Dialogo>
     </Marco>
+  );
+}
+
+/**
+ * La fila de pestañas.
+ *
+ * Con el patrón de pestañas del navegador: las flechas se mueven entre ellas y
+ * Tab salta directo al contenido, así que con el teclado no hay que pasar por
+ * las cuatro para llegar a lo que se eligió. En un teléfono las cuatro no
+ * entran en un renglón, y una fila que se desplaza de costado escondía la
+ * última: van de a dos.
+ */
+function Pestanas({
+  actual,
+  onCambiar,
+  conAviso,
+}: {
+  actual: IdPestana;
+  onCambiar: (id: IdPestana) => void;
+  conAviso: IdPestana[];
+}) {
+  const botones = useRef<(HTMLButtonElement | null)[]>([]);
+
+  function alTeclear(e: KeyboardEvent<HTMLDivElement>) {
+    const i = PESTANAS.findIndex((p) => p.id === actual);
+    const destino =
+      e.key === "ArrowRight"
+        ? (i + 1) % PESTANAS.length
+        : e.key === "ArrowLeft"
+          ? (i - 1 + PESTANAS.length) % PESTANAS.length
+          : e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? PESTANAS.length - 1
+              : null;
+    if (destino === null) return;
+    e.preventDefault();
+    onCambiar(PESTANAS[destino]!.id);
+    botones.current[destino]?.focus();
+  }
+
+  return (
+    <div>
+      <div
+        role="tablist"
+        aria-label="Secciones de la configuración"
+        onKeyDown={alTeclear}
+        className="grid grid-cols-2 gap-1 rounded-md bg-black/[0.045] p-1 sm:inline-flex"
+      >
+        {PESTANAS.map((p, i) => {
+          const elegida = p.id === actual;
+          return (
+            <button
+              key={p.id}
+              ref={(el) => {
+                botones.current[i] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`pestana-${p.id}`}
+              aria-selected={elegida}
+              aria-controls={`panel-${p.id}`}
+              tabIndex={elegida ? 0 : -1}
+              onClick={() => onCambiar(p.id)}
+              className={cn(
+                "flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded px-3.5 text-base sm:min-h-9 transition-all duration-200 ease-suave",
+                elegida
+                  ? "bg-papel font-medium text-acento-texto shadow-apoyo"
+                  : "text-tinta-suave hover:text-tinta"
+              )}
+            >
+              {p.nombre}
+              {conAviso.includes(p.id) && (
+                <span className="h-1.5 w-1.5 rounded-full bg-aviso-texto">
+                  <span className="sr-only">, pide atención</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -523,6 +697,222 @@ function Actualizaciones() {
             </span>
           )}
         </div>
+      </div>
+    </Hoja>
+  );
+}
+
+/**
+ * La copia fuera de la computadora.
+ *
+ * Las copias de la tarjeta de al lado viven en el mismo disco que el archivo
+ * que protegen: sirven para volver atrás de un error, no para el día que el
+ * disco no arranca. Ahí se van con él.
+ *
+ * Por eso esta tarjeta insiste cuando está sin configurar, en vez de esperar
+ * que alguien la descubra. Es lo único que separa al negocio de perder años de
+ * ventas, y no hay servidor de nadie donde queden por las dudas.
+ */
+function CopiaDeSeguridad({
+  estado,
+  onCambio,
+  onVolverA,
+}: {
+  // Sin `null`: la tarjeta solo se dibuja cuando el servidor mandó el estado,
+  // que es cuando quien mira es el dueño.
+  estado: NonNullable<Sistema["resguardo"]>;
+  onCambio: () => void;
+  onVolverA: (nombre: string) => void;
+}) {
+  const avisos = useAvisos();
+  const [ruta, setRuta] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [eligiendo, setEligiendo] = useState(false);
+  const [copiando, setCopiando] = useState(false);
+
+  async function elegirCarpeta() {
+    setEligiendo(true);
+    try {
+      const r = await api.post<{ carpeta: string | null }>("/sistema/elegir-carpeta");
+      if (r.carpeta) await guardar(r.carpeta);
+    } catch {
+      // Sin cuadro de Windows queda el campo para escribir la ruta, que es
+      // exactamente lo que ya está en pantalla. No hace falta alarmar.
+    } finally {
+      setEligiendo(false);
+    }
+  }
+
+  async function guardar(carpeta: string) {
+    setGuardando(true);
+    try {
+      const r = await api.put<{ copia: string | null }>("/sistema/resguardo", { carpeta });
+      avisos.exito(
+        r.copia ? "Listo. La primera copia ya está en la carpeta." : "Carpeta guardada."
+      );
+      setRuta("");
+      onCambio();
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo guardar la carpeta.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function copiarAhora() {
+    setCopiando(true);
+    try {
+      await api.post("/sistema/resguardo/copia");
+      avisos.exito("Copia guardada en la carpeta.");
+      onCambio();
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo copiar.");
+    } finally {
+      setCopiando(false);
+    }
+  }
+
+  async function sacar() {
+    setGuardando(true);
+    try {
+      await api.put("/sistema/resguardo", { carpeta: "" });
+      avisos.exito("Se dejó de copiar a esa carpeta.");
+      onCambio();
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo sacar la carpeta.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Hoja
+      titulo="Copia de seguridad"
+      accion={
+        estado.carpeta ? (
+          <Etiqueta tono={estado.error ? "alerta" : estado.dias !== null && estado.dias > 3 ? "aviso" : "exito"}>
+            {estado.error
+              ? "Sin acceso"
+              : estado.dias === null
+                ? "Sin copias"
+                : estado.dias === 0
+                  ? "Al día"
+                  : `Hace ${numero(estado.dias)} ${estado.dias === 1 ? "día" : "días"}`}
+          </Etiqueta>
+        ) : (
+          <Etiqueta tono="aviso">Sin configurar</Etiqueta>
+        )
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {!estado.carpeta ? (
+          <>
+            <p className="text-base text-tinta-suave">
+              Las copias de acá abajo se guardan en esta misma computadora. Si el disco deja de
+              arrancar, se van con él. Elegí una carpeta <strong className="text-tinta">afuera</strong>{" "}
+              —un pendrive que quede enchufado, la carpeta de OneDrive o Drive, una carpeta de la
+              red— y el programa va a dejar ahí una copia por día, solo.
+            </p>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <span className="min-w-[220px] flex-1">
+                <Campo
+                  etiqueta="Carpeta"
+                  value={ruta}
+                  onChange={(e) => setRuta(e.target.value)}
+                  placeholder="D:\ o la carpeta que uses"
+                />
+              </span>
+              <Boton
+                tono="principal"
+                icono="carpeta"
+                onClick={() => void elegirCarpeta()}
+                disabled={eligiendo || guardando}
+              >
+                {eligiendo ? "Elegí en la ventana…" : "Buscar carpeta"}
+              </Boton>
+              {ruta.trim() && (
+                <Boton onClick={() => void guardar(ruta.trim())} disabled={guardando}>
+                  Usar esta
+                </Boton>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="etiqueta-campo">Dónde se copia</p>
+              <p className="mt-1 break-all rounded border border-linea bg-lienzo px-3 py-2 font-mono text-chico">
+                {estado.carpeta}
+              </p>
+            </div>
+
+            {estado.error ? (
+              // Que no se llegue al destino no es un detalle: mientras dure, no
+              // hay copia de seguridad, aunque la carpeta siga configurada.
+              <div className="rounded-md border border-alerta-linea bg-alerta-fondo px-3 py-2.5 text-base text-alerta-texto">
+                <strong>No se está copiando.</strong> {estado.error}
+              </div>
+            ) : (
+              <p className="text-base text-tinta-suave">
+                {estado.copias === 0
+                  ? "Todavía no hay ninguna copia en esa carpeta."
+                  : `Hay ${numero(estado.copias)} ${estado.copias === 1 ? "copia guardada" : "copias guardadas"}. ` +
+                    (estado.dias === 0
+                      ? "La última es de hoy."
+                      : `La última es de hace ${numero(estado.dias ?? 0)} ${estado.dias === 1 ? "día" : "días"}.`)}{" "}
+                Se guarda una por día al abrir el programa.
+              </p>
+            )}
+
+            {estado.archivos.length > 0 && (
+              <div>
+                <p className="etiqueta-campo">Volver a una de estas</p>
+                {/* Este es el camino del día malo: la computadora vieja no
+                    arranca, en la nueva se instala Visual App, se elige el
+                    pendrive y se vuelve. Sin esto la copia estaba pero había
+                    que meterla a mano en la carpeta correcta, justo cuando
+                    nadie quiere tocar nada. */}
+                <ul className="mt-1.5 max-h-52 overflow-y-auto rounded-md border border-linea">
+                  {estado.archivos.map((copia) => (
+                    <li
+                      key={copia.nombre}
+                      className="flex flex-wrap items-center justify-between gap-2 border-b border-linea px-3 py-2 last:border-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-mono text-chico">{copia.nombre}</span>
+                        {copia.fecha && (
+                          <span className="block text-chico text-tinta-suave">
+                            {fechaHora(copia.fecha)}
+                          </span>
+                        )}
+                      </span>
+                      <Boton icono="recargar" onClick={() => onVolverA(copia.nombre)}>
+                        Volver a esta
+                      </Boton>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Boton icono="copiar" onClick={() => void copiarAhora()} disabled={copiando}>
+                {copiando ? "Copiando…" : "Copiar ahora"}
+              </Boton>
+              <Boton
+                icono="carpeta"
+                onClick={() => void elegirCarpeta()}
+                disabled={eligiendo || guardando}
+              >
+                Cambiar carpeta
+              </Boton>
+              <Boton onClick={() => void sacar()} disabled={guardando}>
+                Dejar de copiar
+              </Boton>
+            </div>
+          </>
+        )}
       </div>
     </Hoja>
   );

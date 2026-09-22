@@ -6,10 +6,19 @@ import { fileURLToPath } from "node:url";
 
 import { prepararActualizaciones, vigilarActualizaciones } from "./actualizacion.ts";
 import { Almacen, Regla } from "./almacen.ts";
-import { leerCuerpo, responderJson, Respuesta, Ruteador } from "./http.ts";
+import {
+  leerCuerpo,
+  responderJson,
+  Respuesta,
+  Ruteador,
+  tokenDeCookies,
+  type Acceso,
+} from "./http.ts";
 import { lanzar } from "./lanzar.ts";
+import { direccionesDeRed, puedeEntrar } from "./red.ts";
 import { Sitio } from "./sitio.ts";
-import { ultimoLatido } from "./vida.ts";
+import { usuarioDeToken } from "./usuarios.ts";
+import { anotarEscucha, ultimoLatido } from "./vida.ts";
 
 import { rutasCaja } from "./api/caja.ts";
 import { rutasCatalogo } from "./api/catalogo.ts";
@@ -19,9 +28,13 @@ import { rutasInformes } from "./api/informes.ts";
 import { rutasMovimientos } from "./api/movimientos.ts";
 import { rutasPanel } from "./api/panel.ts";
 import { rutasPedidos } from "./api/pedidos.ts";
+import { rutasProveedores } from "./api/proveedores.ts";
+import { rutasRecuento } from "./api/recuento.ts";
+import { rutasVencimientos } from "./api/vencimientos.ts";
 import { rutasActualizacion } from "./api/actualizacion.ts";
 import { rutasSistema } from "./api/sistema.ts";
 import { rutasTraspaso } from "./api/traspaso.ts";
+import { rutasUsuarios } from "./api/usuarios.ts";
 
 // =====================================================================
 // Visual App — panel de stock, caja y ventas.
@@ -48,10 +61,14 @@ rutasCaja(api, almacen);
 rutasPedidos(api, almacen);
 rutasClientes(api, almacen);
 rutasGastos(api, almacen);
+rutasProveedores(api, almacen);
+rutasRecuento(api, almacen);
+rutasVencimientos(api, almacen);
 rutasInformes(api, almacen);
 rutasSistema(api, almacen);
 rutasTraspaso(api, almacen);
 rutasActualizacion(api, almacen);
+rutasUsuarios(api, almacen);
 
 prepararActualizaciones(opciones.carpeta);
 
@@ -60,10 +77,12 @@ const servidor = http.createServer((req, res) => {
 });
 
 async function atender(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-  // Solo atiende a quien entró por la puerta de casa. Ver `esLocal`.
-  if (!esLocal(req.headers.host) || !esLocal(req.headers.origin)) {
+  // Con la red apagada, solo esta computadora. Con la red prendida, además
+  // cualquier dirección privada — el wifi del local. Ver `red.ts`.
+  const enRed = almacen.leer((d) => d.config.enRed);
+  if (!puedeEntrar(req.headers.host, enRed) || !puedeEntrar(req.headers.origin, enRed)) {
     res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Visual App solo atiende pedidos de esta computadora.");
+    res.end("Visual App solo atiende pedidos de esta computadora o de la red del local.");
     return;
   }
 
@@ -74,6 +93,11 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
     res.setHeader("Access-Control-Allow-Origin", origen);
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    // La sesión viaja en cookie, y el navegador no la manda entre puertos
+    // distintos sin este permiso. Se puede nombrar el origen porque `esLocal`
+    // ya filtró todo lo que no sea esta computadora: con `*` el navegador
+    // directamente prohíbe las credenciales.
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
   if (req.method === "OPTIONS") {
@@ -95,7 +119,8 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
       req.method ?? "GET",
       camino.slice(4) || "/",
       direccion.searchParams,
-      cuerpo
+      cuerpo,
+      quienPide(req)
     );
 
     if (!encontrada) {
@@ -104,6 +129,9 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
     }
 
     if (resultado instanceof Respuesta) {
+      for (const [nombre, valor] of Object.entries(resultado.cabeceras)) {
+        res.setHeader(nombre, valor);
+      }
       responderJson(res, resultado.estado, resultado.cuerpo);
       return;
     }
@@ -125,31 +153,20 @@ async function atender(req: http.IncomingMessage, res: http.ServerResponse): Pro
 }
 
 /**
- * ¿Este pedido salió de esta computadora?
+ * Quién manda este pedido.
  *
- * El servidor escucha en 127.0.0.1, y eso alcanzaba para creer que nadie de
- * afuera lo alcanzaba. No alcanza: cualquier página web abierta en el
- * navegador corre EN esta computadora, y puede escribirle. Un `fetch` con
- * `Content-Type: text/plain` no dispara consulta previa, así que el pedido
- * llega y se ejecuta; lo único que el navegador impide después es leer la
- * respuesta. Con eso, un sitio cualquiera podía vaciar la base entera sin que
- * nadie se enterara —probado, borraba todo— o abrir un turno de caja.
- *
- * Se miran las dos cabeceras que el navegador escribe y una página no puede
- * falsificar:
- *
- * - `Origin` dice de qué sitio salió el pedido. La interfaz de Visual App manda
- *   `http://localhost:5177`; una página de internet manda su propio dominio.
- *   Cuando no viene —una navegación normal, o `curl`— no hay sitio del que
- *   defenderse.
- * - `Host` es el nombre por el que se llegó, y cierra la otra puerta: un
- *   dominio que apunta a 127.0.0.1 haría que el navegador considere a Visual App
- *   "el mismo sitio" y deje leer las respuestas.
+ * `exigir` sale de si el negocio tiene algún usuario activo. Mientras no tenga
+ * ninguno, la aplicación se usa sin contraseña igual que siempre: es lo que
+ * hace que actualizar a esta versión no deje a nadie afuera de su negocio, y
+ * lo que permite que el primer usuario se cree sin tener con qué entrar.
  */
-function esLocal(valor: string | undefined): boolean {
-  if (valor === undefined) return true;
-  const sinEsquema = valor.replace(/^https?:\/\//, "");
-  return /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(sinEsquema);
+function quienPide(req: http.IncomingMessage): Acceso {
+  const token = tokenDeCookies(req.headers.cookie);
+
+  return almacen.leer((d) => ({
+    usuario: usuarioDeToken(d, token),
+    exigir: d.usuarios.some((u) => u.activo),
+  }));
 }
 
 arrancar(opciones.puerto);
@@ -180,12 +197,23 @@ function arrancar(puerto: number, intentos = 0): void {
     })();
   });
 
-  servidor.listen(puerto, "127.0.0.1", () => {
+  // `0.0.0.0` es "atendé por todas las placas de red"; `127.0.0.1` es "solo
+  // por la de adentro, que no sale de esta computadora". Es la diferencia
+  // entre que el celular llegue o no llegue.
+  const enRed = almacen.leer((d) => d.config.enRed);
+
+  servidor.listen(puerto, enRed ? "0.0.0.0" : "127.0.0.1", () => {
+    anotarEscucha(puerto, enRed);
     const direccion = `http://localhost:${puerto}`;
 
     console.log("");
     console.log("  Visual App");
     console.log(`  Abierto en   ${direccion}`);
+    if (enRed) {
+      for (const ip of direccionesDeRed()) {
+        console.log(`  Desde el local  http://${ip}:${puerto}`);
+      }
+    }
     console.log(`  Datos en     ${almacen.archivo}`);
     console.log("");
 
@@ -221,6 +249,25 @@ function resguardarAlAbrir(): void {
     // Una copia que falla —disco lleno, carpeta sin permisos— no puede impedir
     // que el negocio abra. Se avisa y el programa sigue.
     console.error(`  No se pudo guardar la copia del día: ${(error as Error).message}`);
+  }
+
+  // Y la de afuera, si el negocio eligió una carpeta.
+  //
+  // Esta es la que importa de verdad: la de arriba vive en el mismo disco que
+  // el archivo que protege, así que del disco que no arranca no salva a nadie.
+  //
+  // Que falle no frena nada ni se avisa acá con un cartel: el destino puede ser
+  // un pendrive que hoy no está enchufado, y trabar el mostrador por eso sería
+  // peor que la falta de copia. La pantalla lo muestra —Configuración lo dice,
+  // y el Panel avisa si se hizo vieja— porque ahí se puede leer con calma.
+  const carpeta = almacen.leer((d) => d.config.resguardo);
+  if (!carpeta) return;
+
+  try {
+    const copia = almacen.resguardar(carpeta);
+    if (copia) console.log(`  Copia de seguridad  ${copia}`);
+  } catch (error) {
+    console.error(`  No se pudo guardar la copia de seguridad: ${(error as Error).message}`);
   }
 }
 

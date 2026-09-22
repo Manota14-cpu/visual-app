@@ -53,10 +53,16 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
       const costoDe = (item: { productoId: string | null; costo?: number | null }) =>
         item.costo ?? d.productos.find((p) => p.id === item.productoId)?.precioCosto ?? 0;
 
-      const ingreso = renglones.reduce(
+      // Los renglones a precio de lista, y lo que se regaló en descuentos.
+      // El ingreso de verdad es la resta: sumar los renglones a secas haría
+      // que el informe cobrara de más y que el margen saliera mejor de lo que
+      // fue, justamente en el negocio que más descuentos hace.
+      const aPrecioDeLista = renglones.reduce(
         (s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso),
         0
       );
+      const descuentos = ventas.reduce((s, p) => s + (p.descuento ?? 0), 0);
+      const ingreso = aPrecioDeLista - descuentos;
       const costo = renglones.reduce(
         (s, i) => s + importeRenglon(costoDe(i), i.cantidad, i.porPeso),
         0
@@ -82,13 +88,16 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
       // seria promediar meses distintos a un solo precio.
       const porProducto = new Map<
         string,
-        { nombre: string; unidades: number; ingreso: number; costo: number }
+        { nombre: string; unidades: number; porPeso: boolean; ingreso: number; costo: number }
       >();
       for (const item of renglones) {
         const clave = item.productoId ?? item.nombre;
         const actual = porProducto.get(clave) ?? {
           nombre: d.productos.find((p) => p.id === item.productoId)?.nombre ?? item.nombre,
           unidades: 0,
+          // Lo dice el renglón, que lo copió el día de la venta. Sin esto la
+          // pantalla mostraba "5.050 unidades" de pan francés: eran gramos.
+          porPeso: item.porPeso ?? false,
           ingreso: 0,
           costo: 0,
         };
@@ -108,6 +117,7 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
             productoId: producto?.id ?? null,
             nombre: v.nombre,
             unidades: v.unidades,
+            porPeso: v.porPeso,
             ingreso: v.ingreso,
             costo: costoProducto,
             // Por la funcion compartida y no a mano: el mismo calculo
@@ -140,6 +150,7 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
             categoria: d.categorias.find((c) => c.id === p.categoriaId)?.nombre ?? null,
             stock: p.stock,
             unidadMedida: p.unidadMedida,
+            porPeso: p.porPeso,
             capital: importeRenglon(p.precioCosto ?? 0, p.stock, p.porPeso),
             diasQuieto: ultimo
               ? Math.floor((Date.now() - new Date(ultimo.creadoEn).getTime()) / 86_400_000)
@@ -188,6 +199,9 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
           unidades: contarRenglones(renglones).unidades,
           gramos: contarRenglones(renglones).gramos,
           ingreso,
+          /** A precio de lista, antes de descuentos. */
+          aPrecioDeLista,
+          descuentos,
           costo,
           margen: margenSobreVenta(ingreso, costo),
           margenCosto: margenSobreCosto(ingreso, costo),
@@ -214,6 +228,11 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
 
         // Desde que existe la caja hay dos formas de vender; sin separarlas no
         // se puede saber cuál sostiene el negocio.
+        // Quién vendió qué. Cada venta guarda quién la hizo; esto es lo que
+        // hace que tener usuarios sirva para algo más que cerrar puertas: el
+        // dueño ve cuánto cobró cada uno, cuánto descontó y cuánto devolvió.
+        porUsuario: porUsuario(ventas),
+
         porCanal: [...canales.entries()]
           .map(([canal, v]) => ({ canal, pedidos: v.pedidos, ingreso: v.ingreso }))
           .sort((x, y) => y.ingreso - x.ingreso),
@@ -251,6 +270,46 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
         // información, es un período sin actividad.
         resultado: ventas.length > 0 ? ingreso - costo - gastadoOperativo : null,
       };
-    })
-  );
+    }), "dueno");
+}
+
+/**
+ * Las ventas del período agrupadas por quien las hizo.
+ *
+ * Las devoluciones van aparte y en positivo: sumarlas como ventas negativas
+ * escondería que alguien devuelve mucho detrás de que vende mucho.
+ */
+function porUsuario(
+  ventas: { usuario: string | null; total: number; descuento?: number; canal: string }[]
+) {
+  const grupos = new Map<
+    string,
+    { usuario: string; ventas: number; vendido: number; descuentos: number; devoluciones: number; devuelto: number }
+  >();
+
+  for (const v of ventas) {
+    // Lo anterior a los usuarios no tiene autor, y se dice así en vez de
+    // repartirlo entre alguien.
+    const quien = v.usuario ?? "Sin identificar";
+    const g = grupos.get(quien) ?? {
+      usuario: quien,
+      ventas: 0,
+      vendido: 0,
+      descuentos: 0,
+      devoluciones: 0,
+      devuelto: 0,
+    };
+
+    if (v.canal === "devolucion" || v.total < 0) {
+      g.devoluciones++;
+      g.devuelto += Math.abs(v.total);
+    } else {
+      g.ventas++;
+      g.vendido += v.total;
+      g.descuentos += v.descuento ?? 0;
+    }
+    grupos.set(quien, g);
+  }
+
+  return [...grupos.values()].sort((x, y) => y.vendido - x.vendido);
 }

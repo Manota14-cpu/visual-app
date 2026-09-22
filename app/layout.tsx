@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Avisos } from "@/components/avisos";
+import { ProveedorSesion } from "@/lib/sesion";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,7 +34,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="es">
       <body>
-        <Avisos>{children}</Avisos>
+        <ProveedorSesion>
+          <Avisos>{children}</Avisos>
+        </ProveedorSesion>
       </body>
     </html>
   );

@@ -55,6 +55,7 @@ export function rutasMovimientos(r: Ruteador, a: Almacen): void {
             cantidad: m.cantidad,
             stockResultante: m.stockResultante,
             motivo: m.motivo,
+      usuario: m.usuario,
             creadoEn: m.creadoEn,
           };
         }),

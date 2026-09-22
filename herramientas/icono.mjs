@@ -1,185 +1,106 @@
-import { deflateSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { leerPng, comoPng } from "./png.mjs";
 
 /**
- * Genera el ícono de Visual App.
+ * Genera el ícono de Visual App a partir del arte de la marca.
  *
  * Windows necesita un .ico para el acceso directo, y un .ico es un contenedor
- * de imágenes: se dibuja el mismo símbolo en seis tamaños y se los mete a
- * todos, para que la barra de tareas, el escritorio y el explorador tomen cada
- * uno el que le sirve.
+ * de imágenes: el mismo símbolo en seis tamaños, para que la barra de tareas,
+ * el escritorio y el explorador tomen cada uno el que le sirve.
  *
- * Está dibujado a mano con funciones de distancia en vez de con una biblioteca:
- * son cien líneas, no agrega una dependencia al proyecto y el resultado no
- * depende de que la máquina tenga instalada una fuente.
+ * Hay DOS artes de origen, no uno:
  *
- *   node herramientas/icono.mjs dist/Visual App.ico
+ *   marca-plana.png  el dibujo completo — el monograma VA, el cometa que lo
+ *                    rodea y la estrella. Es la marca.
+ *   marca-chica.png  solo el VA, un poco más grande y con la baldosa al ras.
+ *
+ * A 16 y 32 píxeles el cometa se convierte en una mancha sucia encima de las
+ * letras y la estrella directamente no existe: ahí no aportan, ensucian. Y el
+ * aire que el cometa necesita alrededor del VA, a 16 píxeles es baldosa
+ * desperdiciada. Por eso los tamaños chicos salen de un dibujo propio. Es lo
+ * que hace cualquier juego de íconos serio: cada tamaño se dibuja para el
+ * tamaño en el que se va a ver, en vez de escalar uno solo y aceptar lo que
+ * salga.
+ *
+ * Las dos piezas salen de `marca-derivada.mjs`, que las rehace desde el arte.
+ *
+ *   node herramientas/icono.mjs "dist/Visual App.ico"
+ *   node herramientas/icono.mjs public/icon-512.png 512
  */
+
+const AQUI = dirname(fileURLToPath(import.meta.url));
 
 const TAMANOS = [16, 32, 48, 64, 128, 256];
 
-// El monograma va en blanco sobre el azul de la marca.
-//
-// Antes era al revés —negro sobre una baldosa casi blanca— y tenía dos
-// problemas. Uno: la baldosa clara con su borde de un pelo se leía como un
-// recuadro vacío, más placeholder que marca. Dos: a 16 píxeles, que es como se
-// ve en la barra de tareas, un monograma negro sobre claro se convierte en una
-// mancha gris. Una baldosa de color llena se reconoce por el color aunque no
-// se distinga una sola letra, que es de lo que viven todos los íconos buenos.
-const BALDOSA = [0, 113, 227];
-const TINTA = [255, 255, 255];
+/** Hasta acá manda el dibujo simplificado. Medido mirándolos, no a ojo. */
+const CORTE_CHICO = 32;
 
-/** Qué tan adentro del rectángulo redondeado está un punto. Negativo es adentro. */
-function distanciaAlCuadrado(x, y, lado, radio) {
-  const centro = lado / 2;
-  const mitad = centro - lado * 0.055; // un margen, para que no toque el borde
-  const dx = Math.abs(x - centro) - (mitad - radio);
-  const dy = Math.abs(y - centro) - (mitad - radio);
-
-  const fuera = Math.hypot(Math.max(dx, 0), Math.max(dy, 0));
-  return fuera + Math.min(Math.max(dx, dy), 0) - radio;
-}
-
-/** Distancia de un punto a un segmento grueso: es cada trazo de la letra. */
-function distanciaAlTrazo(x, y, x1, y1, x2, y2, grosor) {
-  const vx = x2 - x1;
-  const vy = y2 - y1;
-  const largo = vx * vx + vy * vy;
-  const t = largo === 0 ? 0 : Math.max(0, Math.min(1, ((x - x1) * vx + (y - y1) * vy) / largo));
-  return Math.hypot(x - (x1 + t * vx), y - (y1 + t * vy)) - grosor;
-}
+// ────────────────────────────  Achicar  ────────────────────────────
 
 /**
- * El monograma: una V y una A, pegadas.
+ * Achica promediando el área que cae en cada píxel de destino.
  *
- * Son seis trazos —dos de la V, dos de la A y su travesaño— con la pata derecha
- * de la V y la izquierda de la A casi paralelas y muy cerca. Ese encuentro es
- * lo que hace que se lea como una sola marca y no como dos letras sueltas.
+ * Tomar una muestra suelta —el vecino más cercano— deja el trazo del VA
+ * dentado y el cometa hecho pedazos. Promediar el área es lo que convierte un
+ * trazo de veinte píxeles en uno de dos sin que se rompa.
  *
- * El trazo es grueso a propósito: a 16 píxeles, que es como se ve en la barra
- * de tareas, un trazo fino se convierte en un gris sucio.
+ * El color se promedia MULTIPLICADO por el alfa. Sin eso, los píxeles
+ * transparentes de la esquina redondeada —que son negros y no se ven— arrastran
+ * el promedio hacia el negro y la baldosa queda con un halo sucio alrededor.
  */
-function distanciaALaLetra(x, y, lado) {
-  const u = (v) => v * lado; // proporciones, para que escale a cualquier tamaño
-  const grosor = u(0.0578);
-
-  const alto = 0.281; // dónde empieza arriba
-  const piso = 0.719; // dónde termina abajo
-
-  // Los remates son planos, no redondeados. La distancia a un segmento da una
-  // punta con forma de cápsula; cortándola contra la franja de la letra —quedarse
-  // con lo que está adentro de las dos formas— el trazo termina en un filo recto,
-  // que es lo que hace que la marca se lea dibujada y no escrita a mano.
-  const franja = Math.max(u(alto) - y, y - u(piso));
-  const recto = (x1, y1, x2, y2, ancho = grosor) =>
-    Math.max(distanciaAlTrazo(x, y, x1, y1, x2, y2, ancho), franja);
-
-  // Tres trazos, no cuatro: la pata derecha de la V y la izquierda de la A son
-  // el MISMO trazo. Antes eran dos trazos casi paralelos separados por un pelo,
-  // y a tamaño chico ese pelo se cerraba solo y dejaba un borrón donde tendría
-  // que haber un vértice. Compartiéndolo, el encuentro es un ángulo limpio a
-  // cualquier tamaño, y la marca se lee como una sola pieza en vez de como dos
-  // letras empujadas una contra la otra.
-  return Math.min(
-    recto(u(0.266), u(alto), u(0.422), u(piso)), // pata izquierda de la V
-    recto(u(0.422), u(piso), u(0.578), u(alto)), // la compartida: sube al vértice
-    recto(u(0.578), u(alto), u(0.734), u(piso)), // pata derecha de la A
-    // El travesaño, abajo del centro. Sin él, la A se confunde con una segunda
-    // V justo en el tamaño en que menos se puede dudar: el de la barra de tareas.
-    recto(u(0.477), u(0.597), u(0.680), u(0.597), grosor * 0.865)
-  );
-}
-
-/** Cuánto pinta una forma en un píxel: 1 adentro, 0 afuera, y el borde suave. */
-function cobertura(distancia) {
-  return Math.max(0, Math.min(1, 0.5 - distancia));
-}
-
-function dibujar(lado) {
-  const pixeles = Buffer.alloc(lado * lado * 4);
-  const radio = lado * 0.225;
+function achicar(origen, lado) {
+  const { ancho, alto, pixeles } = origen;
+  const salida = Buffer.alloc(lado * lado * 4);
+  const escalaX = ancho / lado;
+  const escalaY = alto / lado;
 
   for (let y = 0; y < lado; y++) {
+    const y0 = Math.floor(y * escalaY);
+    const y1 = Math.max(y0 + 1, Math.ceil((y + 1) * escalaY));
+
     for (let x = 0; x < lado; x++) {
-      const px = x + 0.5;
-      const py = y + 0.5;
+      const x0 = Math.floor(x * escalaX);
+      const x1 = Math.max(x0 + 1, Math.ceil((x + 1) * escalaX));
 
-      const distancia = distanciaAlCuadrado(px, py, lado, radio);
-      const fondo = cobertura(distancia);
-      if (fondo <= 0) continue;
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let sy = y0; sy < y1 && sy < alto; sy++) {
+        for (let sx = x0; sx < x1 && sx < ancho; sx++) {
+          const i = (sy * ancho + sx) * 4;
+          const alfa = pixeles[i + 3] / 255;
+          r += pixeles[i] * alfa;
+          g += pixeles[i + 1] * alfa;
+          b += pixeles[i + 2] * alfa;
+          a += pixeles[i + 3];
+          n++;
+        }
+      }
 
-      // Ya no hay anillo de borde: la baldosa es de color y se recorta sola
-      // contra cualquier fondo, que es para lo que existía el borde.
-      const letra = cobertura(distanciaALaLetra(px, py, lado));
-
-      const canal = (i) => Math.round(BALDOSA[i] + (TINTA[i] - BALDOSA[i]) * letra);
-
-      const p = (y * lado + x) * 4;
-      pixeles[p] = canal(0);
-      pixeles[p + 1] = canal(1);
-      pixeles[p + 2] = canal(2);
-      pixeles[p + 3] = Math.round(fondo * 255);
+      const d = (y * lado + x) * 4;
+      const alfaMedio = a / n;
+      const peso = alfaMedio / 255;
+      salida[d] = peso > 0 ? Math.round(r / n / peso) : 0;
+      salida[d + 1] = peso > 0 ? Math.round(g / n / peso) : 0;
+      salida[d + 2] = peso > 0 ? Math.round(b / n / peso) : 0;
+      salida[d + 3] = Math.round(alfaMedio);
     }
   }
 
-  return pixeles;
+  return salida;
 }
 
-// ─────────────────────────────  PNG  ─────────────────────────────
+let cacheCompleta = null;
+let cacheChica = null;
 
-function trozo(tipo, datos) {
-  const largo = Buffer.alloc(4);
-  largo.writeUInt32BE(datos.length);
-
-  const cuerpo = Buffer.concat([Buffer.from(tipo, "ascii"), datos]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(cuerpo) >>> 0);
-
-  return Buffer.concat([largo, cuerpo, crc]);
-}
-
-const TABLA_CRC = (() => {
-  const tabla = new Int32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    tabla[n] = c;
+/** El dibujo que le corresponde a ese tamaño, ya achicado. */
+function dibujar(lado) {
+  if (lado <= CORTE_CHICO) {
+    cacheChica ??= leerPng(join(AQUI, "marca-chica.png"));
+    return achicar(cacheChica, lado);
   }
-  return tabla;
-})();
-
-function crc32(buffer) {
-  let c = -1;
-  for (const byte of buffer) c = TABLA_CRC[(c ^ byte) & 0xff] ^ (c >>> 8);
-  return c ^ -1;
-}
-
-function comoPng(pixeles, lado) {
-  const cabecera = Buffer.alloc(13);
-  cabecera.writeUInt32BE(lado, 0);
-  cabecera.writeUInt32BE(lado, 4);
-  cabecera[8] = 8; // bits por canal
-  cabecera[9] = 6; // color RGBA
-  cabecera[10] = 0;
-  cabecera[11] = 0;
-  cabecera[12] = 0;
-
-  // Cada fila lleva adelante un byte con el filtro usado. Sin filtrar (0) es
-  // más grande, pero para un ícono de 256 píxeles la diferencia no se nota.
-  const filas = Buffer.alloc(lado * (lado * 4 + 1));
-  for (let y = 0; y < lado; y++) {
-    const destino = y * (lado * 4 + 1);
-    filas[destino] = 0;
-    pixeles.copy(filas, destino + 1, y * lado * 4, (y + 1) * lado * 4);
-  }
-
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    trozo("IHDR", cabecera),
-    trozo("IDAT", deflateSync(filas, { level: 9 })),
-    trozo("IEND", Buffer.alloc(0)),
-  ]);
+  cacheCompleta ??= leerPng(join(AQUI, "marca-plana.png"));
+  return achicar(cacheCompleta, lado);
 }
 
 // ─────────────────────────────  BMP  ─────────────────────────────
@@ -198,28 +119,26 @@ function comoDib(pixeles, lado) {
   const cabecera = Buffer.alloc(40);
   cabecera.writeUInt32LE(40, 0);
   cabecera.writeInt32LE(lado, 4);
-  cabecera.writeInt32LE(lado * 2, 8); // el doble: la imagen y su máscara
+  cabecera.writeInt32LE(lado * 2, 8);
   cabecera.writeUInt16LE(1, 12);
   cabecera.writeUInt16LE(32, 14);
+  cabecera.writeUInt32LE(0, 16);
+  cabecera.writeUInt32LE(lado * lado * 4, 20);
 
-  const cuerpo = Buffer.alloc(lado * lado * 4);
+  const colores = Buffer.alloc(lado * lado * 4);
   for (let y = 0; y < lado; y++) {
-    const origen = (lado - 1 - y) * lado * 4;
     for (let x = 0; x < lado; x++) {
-      const desde = origen + x * 4;
-      const hasta = (y * lado + x) * 4;
-      cuerpo[hasta] = pixeles[desde + 2]; // B
-      cuerpo[hasta + 1] = pixeles[desde + 1]; // G
-      cuerpo[hasta + 2] = pixeles[desde]; // R
-      cuerpo[hasta + 3] = pixeles[desde + 3]; // A
+      const origen = ((lado - 1 - y) * lado + x) * 4;
+      const destino = (y * lado + x) * 4;
+      colores[destino] = pixeles[origen + 2];
+      colores[destino + 1] = pixeles[origen + 1];
+      colores[destino + 2] = pixeles[origen];
+      colores[destino + 3] = pixeles[origen + 3];
     }
   }
 
-  // La máscara va en ceros: con 32 bits por píxel manda el canal alfa.
-  const anchoMascara = Math.ceil(lado / 32) * 4;
-  const mascara = Buffer.alloc(anchoMascara * lado);
-
-  return Buffer.concat([cabecera, cuerpo, mascara]);
+  const filaMascara = Math.ceil(lado / 32) * 4;
+  return Buffer.concat([cabecera, colores, Buffer.alloc(filaMascara * lado)]);
 }
 
 // ─────────────────────────────  ICO  ─────────────────────────────
@@ -227,7 +146,7 @@ function comoDib(pixeles, lado) {
 function comoIco(imagenes) {
   const cabecera = Buffer.alloc(6);
   cabecera.writeUInt16LE(0, 0);
-  cabecera.writeUInt16LE(1, 2); // 1 = ícono
+  cabecera.writeUInt16LE(1, 2);
   cabecera.writeUInt16LE(imagenes.length, 4);
 
   const entradas = [];
@@ -235,12 +154,11 @@ function comoIco(imagenes) {
 
   for (const { lado, datos } of imagenes) {
     const entrada = Buffer.alloc(16);
-    entrada[0] = lado >= 256 ? 0 : lado; // 0 significa 256
+    // 256 se anota como cero: el campo es de un byte y no entra.
+    entrada[0] = lado >= 256 ? 0 : lado;
     entrada[1] = lado >= 256 ? 0 : lado;
-    entrada[2] = 0; // colores de la paleta
-    entrada[3] = 0;
-    entrada.writeUInt16LE(1, 4); // planos
-    entrada.writeUInt16LE(32, 6); // bits por píxel
+    entrada.writeUInt16LE(1, 4);
+    entrada.writeUInt16LE(32, 6);
     entrada.writeUInt32LE(datos.length, 8);
     entrada.writeUInt32LE(desplazamiento, 12);
 
@@ -257,14 +175,12 @@ const destino = process.argv[2] ?? "dist/Visual App.ico";
 mkdirSync(dirname(destino), { recursive: true });
 
 if (destino.toLowerCase().endsWith(".png")) {
-  // Un PNG suelto: es el que usa la ventana de la aplicación y el que aparece
-  // en la barra de tareas, donde el .ico no llega.
+  // Un PNG suelto: el que usa el manifiesto y el que Windows y los teléfonos
+  // toman para el acceso directo del navegador, donde el .ico no llega.
   const lado = Number(process.argv[3]) || 512;
   writeFileSync(destino, comoPng(dibujar(lado), lado));
   console.log(`  ${destino}  (${lado} px)`);
 } else {
-  // Los tamaños chicos van en el formato viejo, que entiende System.Drawing;
-  // los grandes en PNG, que ocupa mucho menos y el Explorador lee sin problema.
   const imagenes = TAMANOS.map((lado) => {
     const pixeles = dibujar(lado);
     return { lado, datos: lado <= 64 ? comoDib(pixeles, lado) : comoPng(pixeles, lado) };

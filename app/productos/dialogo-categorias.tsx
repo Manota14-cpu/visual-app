@@ -9,7 +9,7 @@ import { numero } from "@/lib/formato";
 import type { Categoria } from "@/lib/tipos";
 
 // La paleta del sistema: los mismos tonos que usan las etiquetas de iOS.
-const COLORES = ["#0A84FF", "#5E5CE6", "#BF5AF2", "#30D158", "#FF9F0A", "#FF375F", "#98989D"];
+const COLORES = ["#0050CE", "#5E5CE6", "#BF5AF2", "#30D158", "#FF9F0A", "#FF375F", "#98989D"];
 
 /**
  * Las categorías, editables sin salir del catálogo.

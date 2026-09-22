@@ -153,8 +153,15 @@ export default function PaginaMovimientos() {
                         <td className="cifra text-right text-tinta-suave">
                           {numero(movimiento.stockResultante)}
                         </td>
-                        <td className="max-w-[260px] truncate text-tinta-suave">
-                          {movimiento.motivo ?? "—"}
+                        <td className="max-w-[260px] text-tinta-suave">
+                          <span className="block truncate">{movimiento.motivo ?? "—"}</span>
+                          {/* Quién lo hizo, debajo y en chico: importa cuando
+                              algo no cierra, no cuando se lee de corrido. */}
+                          {movimiento.usuario && (
+                            <span className="block truncate text-chico text-tinta-tenue">
+                              {movimiento.usuario}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

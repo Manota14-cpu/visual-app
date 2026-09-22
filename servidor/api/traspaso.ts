@@ -65,10 +65,9 @@ export function rutasTraspaso(r: Ruteador, a: Almacen): void {
         contenido: armarCsv(filas),
         productos: productos.length,
       };
-    })
-  );
+    }), "dueno");
 
-  r.post("/catalogo/importar", ({ cuerpo }) => a.leer((d) => planificar(d, cuerpo)));
+  r.post("/catalogo/importar", ({ cuerpo }) => a.leer((d) => planificar(d, cuerpo)), "dueno");
 
   r.post("/catalogo/importar/aplicar", ({ cuerpo }) =>
     a.escribir((d) => {
@@ -173,8 +172,7 @@ export function rutasTraspaso(r: Ruteador, a: Almacen): void {
         categorias: creadas.length,
         omitidos: plan.resumen.errores + (crearFaltantes ? 0 : plan.resumen.nuevos),
       };
-    })
-  );
+    }), "dueno");
 }
 
 // ──────────────────────────────  El archivo  ──────────────────────────────

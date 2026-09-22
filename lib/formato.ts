@@ -80,8 +80,19 @@ export function hoy(referencia = new Date()): string {
  * día anterior: la lista de gastos mostraría todo un día antes.
  */
 export function dia(iso: string): string {
+  return FECHA_LARGA.format(comoDiaLocal(iso));
+}
+
+/**
+ * Un aaaa-mm-dd como instante del mediodía local.
+ *
+ * `new Date("2026-09-19")` lo lee como medianoche UTC, que en Argentina es el
+ * 18 a las 21: la fecha se muestra un día para atrás. Se arma con las partes y
+ * al mediodía, así ni el horario de verano lo corre.
+ */
+export function comoDiaLocal(iso: string): Date {
   const [a, m, d] = iso.split("-").map(Number);
-  return FECHA_LARGA.format(new Date(a ?? 1970, (m ?? 1) - 1, d ?? 1));
+  return new Date(a ?? 1970, (m ?? 1) - 1, d ?? 1, 12);
 }
 
 const TAMANOS = ["B", "KB", "MB", "GB"];

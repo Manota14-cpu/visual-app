@@ -10,9 +10,9 @@ import type { Ruteador } from "../http.ts";
  * alguien aprieta el botón.
  */
 export function rutasActualizacion(r: Ruteador, _a: Almacen): void {
-  r.get("/actualizacion", () => estado());
+  r.get("/actualizacion", () => estado(), "dueno");
 
-  r.post("/actualizacion/revisar", async () => await revisar());
+  r.post("/actualizacion/revisar", async () => await revisar(), "dueno");
 
   r.post("/actualizacion/aplicar", async () => {
     const resultado = await aplicar();
@@ -23,5 +23,5 @@ export function rutasActualizacion(r: Ruteador, _a: Almacen): void {
     setTimeout(() => process.exit(0), 400).unref();
 
     return resultado;
-  });
+  }, "dueno");
 }

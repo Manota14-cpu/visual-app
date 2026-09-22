@@ -29,16 +29,20 @@ const config: Config = {
         // Las separaciones son de un pelo, no una raya.
         linea: "#EBEBED",
         "linea-fuerte": "#D2D2D7",
+        // El azul del logo. Es más profundo que el azul de sistema que había
+        // antes: sobre blanco contrasta 6,9 a 1 (el otro, 4,7), así que el
+        // texto azul chico se lee sin esfuerzo. Al pasar el mouse se oscurece
+        // en vez de aclararse, que con un azul así de saturado se nota más.
         acento: {
-          DEFAULT: "#0071E3",
-          fuerte: "#0077ED",
-          suave: "#EAF2FE",
-          texto: "#0062C4",
+          DEFAULT: "#0050CE",
+          fuerte: "#0044B0",
+          suave: "#EBF1FB",
+          texto: "#0050CE",
         },
         exito: { fondo: "#E8F8EC", texto: "#1D7F35", linea: "#C6EBD0" },
         aviso: { fondo: "#FFF4E0", texto: "#8A5A00", linea: "#F5DFB4" },
         alerta: { fondo: "#FFEDEC", texto: "#C2231A", linea: "#F7CFCC" },
-        dato: { fondo: "#EAF2FE", texto: "#0062C4", linea: "#CFE2FB" },
+        dato: { fondo: "#EBF1FB", texto: "#0050CE", linea: "#CCDCF5" },
       },
       fontFamily: {
         // Fuentes del sistema: la aplicación funciona sin internet, así que no
@@ -87,7 +91,7 @@ const config: Config = {
         elevada: "0 2px 6px rgba(0,0,0,0.05), 0 16px 40px -16px rgba(0,0,0,0.16)",
         flotante: "0 8px 20px rgba(0,0,0,0.08), 0 32px 64px -24px rgba(0,0,0,0.28)",
         boton: "0 1px 2px rgba(0,0,0,0.06)",
-        acento: "0 1px 2px rgba(0,113,227,0.24), 0 6px 16px -8px rgba(0,113,227,0.42)",
+        acento: "0 1px 2px rgba(0,80,206,0.24), 0 6px 16px -8px rgba(0,80,206,0.42)",
       },
       keyframes: {
         entrar: {

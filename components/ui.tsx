@@ -27,7 +27,7 @@ import { Icono, type NombreIcono } from "@/components/iconos";
 type Tono = "principal" | "suave" | "fantasma" | "peligro";
 
 const tonos: Record<Tono, string> = {
-  // El azul del sistema, con su propia sombra teñida: es lo único que se
+  // El azul del logo, con su propia sombra teñida: es lo único que se
   // presenta como "apretame".
   principal:
     "bg-acento text-white border-transparent shadow-acento hover:bg-acento-fuerte active:scale-[0.97]",
@@ -273,11 +273,13 @@ export function Metrica({
   tono?: "alerta" | "aviso" | "exito";
 }) {
   return (
-    <div className="hoja px-4 py-3.5 transition-shadow duration-300 ease-suave hover:shadow-elevada">
-      <p className="etiqueta-campo">{rotulo}</p>
+    <div className="hoja min-w-0 px-4 py-3.5 transition-shadow duration-300 ease-suave hover:shadow-elevada">
+      <p className="etiqueta-campo truncate">{rotulo}</p>
       <p
         className={cn(
-          "cifra mt-1.5 font-titulo text-cifra font-semibold",
+          // En el celular van de a dos: a 30px "$471.890" no entra en media
+          // pantalla. Un escalón menos alcanza y sigue siendo el número grande.
+          "cifra mt-1.5 break-words font-titulo text-[22px] font-semibold leading-7 sm:text-cifra",
           tono === "alerta" && "text-alerta-texto",
           tono === "aviso" && "text-aviso-texto",
           tono === "exito" && "text-exito-texto"

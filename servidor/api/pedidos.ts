@@ -1,5 +1,6 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
+import { esDueno } from "../usuarios.ts";
 import {
   ajustarStock,
   contiene,
@@ -21,7 +22,7 @@ import { paginar } from "./catalogo.ts";
  * que estado y stock se tocan en la misma operación o en ninguna.
  */
 export function rutasPedidos(r: Ruteador, a: Almacen): void {
-  r.get("/pedidos", ({ consulta }) =>
+  r.get("/pedidos", ({ consulta, usuario }) =>
     a.leer((d) => {
       let pedidos = [...d.pedidos];
 
@@ -52,7 +53,7 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       pedidos.sort((x, y) => y.numero - x.numero);
 
       return {
-        ...paginar(pedidos, consulta, 30, (p) => vista(d, p)),
+        ...paginar(pedidos, consulta, 30, (p) => vista(d, p, esDueno(usuario))),
         conteos: Object.fromEntries(
           ESTADOS_PEDIDO.map((e) => [e, d.pedidos.filter((p) => p.estado === e).length])
         ),
@@ -60,21 +61,21 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.get("/pedidos/:id", ({ params }) =>
+  r.get("/pedidos/:id", ({ params, usuario }) =>
     a.leer((d) => {
       const pedido = d.pedidos.find((p) => p.id === params.id);
-      return pedido ? vista(d, pedido) : noEncontrado("Ese pedido no existe.");
+      return pedido ? vista(d, pedido, esDueno(usuario)) : noEncontrado("Ese pedido no existe.");
     })
   );
 
-  r.post("/pedidos/:id/estado", ({ params, cuerpo }) =>
+  r.post("/pedidos/:id/estado", ({ params, cuerpo, usuario }) =>
     a.escribir((d) => {
       const pedido = d.pedidos.find((p) => p.id === params.id);
       if (!pedido) throw new Regla("Ese pedido no existe.");
 
       const estado = cuerpo.estado as EstadoPedido;
       if (!ESTADOS_PEDIDO.includes(estado)) throw new Regla("Ese estado no existe.");
-      if (pedido.estado === estado) return vista(d, pedido);
+      if (pedido.estado === estado) return vista(d, pedido, esDueno(usuario));
 
       // Cancelar una venta la saca de los totales de su turno, y con eso cambia
       // el arqueo de un cierre que ya se firmó: el mismo turno pasaría a mostrar
@@ -87,29 +88,43 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
         // catálogo, el pedido igual se cancela.
         for (const [productoId, cantidad] of porProducto(pedido.items)) {
           if (d.productos.some((p) => p.id === productoId)) {
-            ajustarStock(d, productoId, cantidad, `Pedido #${pedido.numero} cancelado`, "devolucion");
+            ajustarStock(
+              d,
+              productoId,
+              cantidad,
+              `Pedido #${pedido.numero} cancelado`,
+              "devolucion",
+              usuario
+            );
           }
         }
       } else if (pedido.estado === "cancelado") {
         // Se reabre un pedido cancelado: se vuelve a descontar.
         for (const [productoId, cantidad] of porProducto(pedido.items)) {
           if (d.productos.some((p) => p.id === productoId)) {
-            ajustarStock(d, productoId, -cantidad, `Pedido #${pedido.numero} reabierto`, "venta");
+            ajustarStock(
+              d,
+              productoId,
+              -cantidad,
+              `Pedido #${pedido.numero} reabierto`,
+              "venta",
+              usuario
+            );
           }
         }
       }
 
       pedido.estado = estado;
-      return vista(d, pedido);
+      return vista(d, pedido, esDueno(usuario));
     })
   );
 
-  r.post("/pedidos/:id/nota", ({ params, cuerpo }) =>
+  r.post("/pedidos/:id/nota", ({ params, cuerpo, usuario }) =>
     a.escribir((d) => {
       const pedido = d.pedidos.find((p) => p.id === params.id);
       if (!pedido) throw new Regla("Ese pedido no existe.");
       pedido.notas = recortar(cuerpo.notas as string, 1000);
-      return vista(d, pedido);
+      return vista(d, pedido, esDueno(usuario));
     })
   );
 
@@ -220,10 +235,9 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       }
 
       return vista(d, pedido);
-    })
-  );
+    }), "dueno");
 
-  r.borrar("/pedidos/:id", ({ params }) =>
+  r.borrar("/pedidos/:id", ({ params, usuario }) =>
     a.escribir((d) => {
       const indice = d.pedidos.findIndex((p) => p.id === params.id);
       if (indice < 0) throw new Regla("Ese pedido no existe.");
@@ -234,15 +248,21 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       if (pedido.estado !== "cancelado") {
         for (const [productoId, cantidad] of porProducto(pedido.items)) {
           if (d.productos.some((p) => p.id === productoId)) {
-            ajustarStock(d, productoId, cantidad, `Pedido #${pedido.numero} eliminado`, "devolucion");
+            ajustarStock(
+              d,
+              productoId,
+              cantidad,
+              `Pedido #${pedido.numero} eliminado`,
+              "devolucion",
+              usuario
+            );
           }
         }
       }
 
       d.pedidos.splice(indice, 1);
       return { ok: true };
-    })
-  );
+    }), "dueno");
 }
 
 // ──────────────────────────────  Ayudas  ──────────────────────────────
@@ -271,7 +291,7 @@ function porProducto(items: ItemPedido[]): Map<string, number> {
   return total;
 }
 
-export function vista(d: BaseDatos, p: Pedido) {
+export function vista(d: BaseDatos, p: Pedido, verCostos = true) {
   const caja = p.cajaId ? d.cajas.find((c) => c.id === p.cajaId) : undefined;
 
   return {
@@ -283,6 +303,7 @@ export function vista(d: BaseDatos, p: Pedido) {
     clienteId: p.clienteId,
     cliente: p.clienteId ? (d.clientes.find((c) => c.id === p.clienteId)?.nombre ?? null) : null,
     notas: p.notas,
+    descuento: p.descuento,
     total: p.total,
     metodoPago: p.metodoPago,
     recibido: p.recibido,
@@ -290,7 +311,13 @@ export function vista(d: BaseDatos, p: Pedido) {
     cajaNumero: caja?.numero ?? null,
     cajaAbierta: caja?.estado === "abierta",
     pagos: p.pagos,
-    items: p.items,
+    // Quién la hizo. No es dato reservado: en un mostrador donde se turnan
+    // dos personas, es lo primero que se pregunta cuando algo no cierra.
+    usuario: p.usuario,
+    // Cada renglón guarda lo que costó la mercadería el día de la venta. Eso
+    // es del negocio: sin este recorte, la pantalla de Ventas le contaba el
+    // costo y el margen a cualquiera que abriera una venta.
+    items: verCostos ? p.items : p.items.map(({ costo: _costo, ...resto }) => resto),
     unidades: p.items.reduce((s, i) => s + i.cantidad, 0),
     creadoEn: p.creadoEn,
   };

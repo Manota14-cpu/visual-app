@@ -14,17 +14,17 @@
   }
 
   /* El foco se ve siempre: media aplicación se usa con el teclado mientras la
-     otra mano cuenta plata. Es el mismo anillo azul del sistema. */
+     otra mano cuenta plata. Es el azul del logo, el mismo de los botones. */
   :focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 3px rgba(0, 113, 227, 0.35),
-      0 0 0 1px #0071e3;
+      0 0 0 3px rgba(0, 80, 206, 0.32),
+      0 0 0 1px #0050ce;
     border-radius: 8px;
   }
 
   ::selection {
-    background: rgba(0, 113, 227, 0.16);
+    background: rgba(0, 80, 206, 0.16);
   }
 
   /* Una barra fina que aparece sobre el contenido, como la de macOS. */

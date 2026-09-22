@@ -36,6 +36,25 @@ export interface BaseDatos {
    */
   cobrosFiado: CobroFiado[];
   /**
+   * Quiénes usan el programa. Vacío es "todavía nadie": la app funciona sin
+   * pedir contraseña, igual que antes de que esto existiera.
+   */
+  /**
+   * A quiénes le compra el negocio, y lo que les debe.
+   *
+   * Es el espejo de los clientes y el fiado: la app sabía muy bien lo que le
+   * deben al negocio y nada de lo que el negocio debe.
+   */
+  proveedores: Proveedor[];
+  compras: Compra[];
+  /** Las partidas con fecha de vencimiento que hay en el depósito. */
+  vencimientos: Vencimiento[];
+  /** Los recuentos de stock hechos, para poder mirar atrás. */
+  recuentos: Recuento[];
+  usuarios: Usuario[];
+  /** Las sesiones abiertas. Se limpian solas al vencer. */
+  sesiones: Sesion[];
+  /**
    * Los correlativos visibles: número de venta y número de turno. Se guardan en
    * vez de calcularse con un máximo, porque borrar el último pedido no tiene
    * que hacer que el siguiente repita un número ya impreso.
@@ -43,10 +62,199 @@ export interface BaseDatos {
   contadores: { pedido: number; caja: number };
 }
 
+/**
+ * Qué puede hacer cada uno.
+ *
+ * Dos roles y no una lista de permisos: un negocio chico tiene al dueño y a
+ * quien atiende, y un tablero de casillas para tildar no lo va a usar nadie.
+ *
+ * - `dueno`    ve y toca todo, incluidos costos, márgenes, gastos, informes,
+ *              la configuración y los usuarios.
+ * - `empleado` cobra, hace devoluciones, carga stock, ve el catálogo y los
+ *              clientes. No ve lo que costó la mercadería ni cuánto se gana,
+ *              ni los informes, ni los gastos del negocio.
+ */
+export type Rol = "dueno" | "empleado";
+
+export interface Usuario {
+  id: string;
+  /** Cómo se llama, para mostrarlo. */
+  nombre: string;
+  /** Con qué entra. Único, sin mayúsculas ni acentos. */
+  usuario: string;
+  /**
+   * La contraseña, derivada con scrypt. Nunca el texto.
+   *
+   * Guardada como `scrypt$<sal en hex>$<clave en hex>`. Va el algoritmo
+   * adelante para poder cambiarlo algún día sin que las contraseñas viejas
+   * dejen de andar.
+   */
+  clave: string;
+  rol: Rol;
+  activo: boolean;
+  creadoEn: Fecha;
+  ultimoIngreso: Fecha | null;
+}
+
+/**
+ * Una sesión abierta.
+ *
+ * Del token se guarda el HASH, no el token. El archivo de datos es texto
+ * común y encima se copia a un pendrive: con los tokens en claro, cualquiera
+ * que agarre una copia podría entrar como el dueño sin saber la contraseña.
+ */
+export interface Sesion {
+  /** SHA-256 del token que tiene el navegador. */
+  hash: string;
+  usuarioId: string;
+  creadaEn: Fecha;
+  expiraEn: Fecha;
+}
+
+// ──────────────────────────────  Proveedores  ──────────────────────────────
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  cuit: string | null;
+  notas: string | null;
+  /** Eliminar es reversible: se apaga esto y vuelve. */
+  activo: boolean;
+  creadoEn: Fecha;
+}
+
+/**
+ * Una compra a un proveedor: mercadería que entró y todavía hay que pagar.
+ *
+ * El pago NO vive acá. Pagarle a un proveedor es un gasto —plata que sale— y
+ * se anota como gasto, apuntando al proveedor. Así la deuda sale de restar dos
+ * cosas que de verdad pasaron, y no hay un saldo guardado que pueda quedar
+ * desincronizado; es la misma decisión que se tomó con el fiado de clientes.
+ *
+ * Y evita contar dos veces: si la compra fuera un gasto y el pago otro, el
+ * informe sumaría la harina dos veces.
+ */
+export interface Compra {
+  id: string;
+  proveedorId: string;
+  /** aaaa-mm-dd. Un día del calendario, igual que el de un gasto. */
+  fecha: string;
+  /** El número de remito o factura, para poder buscarla después. */
+  comprobante: string | null;
+  detalle: string;
+  total: number;
+  notas: string | null;
+  /** Quién la cargó. Null en lo anterior a los usuarios. */
+  usuarioId: string | null;
+  usuario: string | null;
+  creadoEn: Fecha;
+}
+
+// ─────────────────────────────  Vencimientos  ─────────────────────────────
+
+/**
+ * Una partida con fecha: tantas unidades de esto se vencen tal día.
+ *
+ * Va aparte del producto y no como un campo suyo, porque en la estantería
+ * conviven partidas distintas: la leche que vence el martes y la que vence en
+ * tres semanas son el mismo producto. Un solo campo "vence el" obligaría a
+ * elegir cuál de las dos fechas mentir.
+ *
+ * No toca el stock por su cuenta. Que algo se venza no lo saca del depósito —
+ * lo saca alguien, cuando lo tira—, y ese momento deja su movimiento de salida
+ * como cualquier otro.
+ */
+export interface Vencimiento {
+  id: string;
+  productoId: string;
+  /** Copiado, como en un renglón de venta: el historial no se reescribe. */
+  nombre: string;
+  /** aaaa-mm-dd. Un día del calendario. */
+  fecha: string;
+  cantidad: number;
+  porPeso: boolean;
+  notas: string | null;
+  usuarioId: string | null;
+  usuario: string | null;
+  creadoEn: Fecha;
+}
+
+// ───────────────────────────────  Recuento  ───────────────────────────────
+
+/**
+ * Un recuento de stock: lo que decía el sistema contra lo que había.
+ *
+ * Todo negocio cuenta la góndola cada tanto, y hasta ahora la única forma de
+ * conciliar era ir producto por producto ajustando a mano y escribiendo un
+ * motivo en cada uno. Con veinte diferencias eso no lo hace nadie, y el stock
+ * se va quedando cada vez más lejos de la realidad.
+ *
+ * Se guarda el recuento entero, incluidos los renglones que coincidieron: el
+ * valor está en poder decir "el 21 se contó todo y sobró esto", y sin los que
+ * dieron bien no se sabe si se contó todo o solo lo que fallaba.
+ */
+export interface Recuento {
+  id: string;
+  /** aaaa-mm-dd, el día en que se contó. */
+  fecha: string;
+  /** Null si se contó el depósito entero. */
+  categoriaId: string | null;
+  categoria: string | null;
+  lineas: LineaRecuento[];
+  notas: string | null;
+  usuarioId: string | null;
+  usuario: string | null;
+  creadoEn: Fecha;
+}
+
+export interface LineaRecuento {
+  productoId: string;
+  /** Copiado, como en un renglón de venta: el historial no se reescribe. */
+  nombre: string;
+  porPeso: boolean;
+  /** Lo que decía el sistema en el momento de contar. */
+  esperado: number;
+  /** Lo que había de verdad. */
+  contado: number;
+  /**
+   * Lo que costaba la unidad ese día, para poder valorizar el faltante.
+   *
+   * Sin esto, "faltaron 14 unidades" no dice si son catorce caramelos o
+   * catorce tortas, que es la diferencia entre un error de conteo y un
+   * problema que hay que mirar.
+   */
+  costo: number | null;
+}
+
 export interface Configuracion {
   negocio: string;
   /** Se imprime en el comprobante, debajo del nombre. */
   detalle: string | null;
+  /**
+   * Carpeta fuera de esta computadora donde dejar una copia cada día.
+   *
+   * Un pendrive que queda enchufado, la carpeta de OneDrive o Drive que el
+   * negocio ya usa, una carpeta de la red. Null mientras nadie eligió ninguna.
+   *
+   * Es lo único que protege del disco que no arranca: las copias de adentro
+   * viven en el mismo disco y se van con él.
+   */
+  resguardo: string | null;
+  /**
+   * Atender también a los celulares y tablets del local.
+   *
+   * Apagado, el programa escucha solo en 127.0.0.1 y nadie de afuera llega.
+   * Prendido, escucha en la red y acepta pedidos que vengan de una dirección
+   * privada — la del wifi del local, nunca de internet.
+   *
+   * Solo tiene sentido con usuarios creados: sin contraseña, abrirlo al wifi
+   * deja entrar a cualquiera que esté conectado, incluido un cliente. El
+   * servidor lo exige y no se puede prender sin eso.
+   */
+  enRed: boolean;
   creadaEn: Fecha;
 }
 
@@ -114,6 +322,17 @@ export interface Movimiento {
   /** Con cuánto quedó el producto, para auditar sin recalcular. */
   stockResultante: number;
   motivo: string | null;
+  /**
+   * Quién lo hizo. Null en lo cargado antes de que existieran los usuarios, y
+   * en un negocio que todavía no creó ninguno.
+   *
+   * Va el id Y el nombre, copiado. El id sirve para agrupar; el nombre está
+   * copiado por la misma razón que el de un producto en un renglón de venta:
+   * si a esa persona la dan de baja o le cambian el nombre, el historial tiene
+   * que seguir diciendo quién lo hizo el día que pasó.
+   */
+  usuarioId: string | null;
+  usuario: string | null;
   creadoEn: Fecha;
 }
 
@@ -125,6 +344,9 @@ export interface CambioPrecio {
   costoAnterior: number | null;
   costoNuevo: number | null;
   motivo: string | null;
+  /** Quién lo cambió. Null en lo anterior a los usuarios. */
+  usuarioId: string | null;
+  usuario: string | null;
   creadoEn: Fecha;
 }
 
@@ -206,6 +428,17 @@ export interface Pedido {
   nombre: string;
   clienteId: string | null;
   notas: string | null;
+  /**
+   * Lo que se descontó de esta venta, en pesos.
+   *
+   * Se guarda aparte y no bajando el precio de los renglones. Bajando el
+   * precio la venta cierra igual, pero se pierde para siempre el dato de que
+   * hubo descuento: el informe no puede decir cuánta plata se regaló, ni el
+   * dueño enterarse de que alguien hace 20% todos los días.
+   *
+   * `total` ya lo tiene restado: es lo que de verdad entró.
+   */
+  descuento: number;
   total: number;
   /** La etiqueta: un medio, o "mixto" si se pagó con varios. */
   metodoPago: string | null;
@@ -214,6 +447,15 @@ export interface Pedido {
   cajaId: string | null;
   pagos: PagoPedido[];
   items: ItemPedido[];
+  /**
+   * Quién lo hizo. Null en lo cargado antes de que existieran los usuarios.
+   *
+   * Van el id Y el nombre copiado, igual que el nombre de un producto en un
+   * renglón: si a esa persona la dan de baja o le cambian el nombre, el
+   * historial tiene que seguir diciendo quién fue el día que pasó.
+   */
+  usuarioId: string | null;
+  usuario: string | null;
   creadoEn: Fecha;
 }
 
@@ -244,7 +486,19 @@ export interface Gasto {
   concepto: string;
   monto: number;
   metodoPago: string;
+  /**
+   * El nombre escrito a mano. Es lo que había antes de que existieran los
+   * proveedores como entidad, y se conserva: las bases viejas lo tienen
+   * cargado y perderlo sería perder información.
+   */
   proveedor: string | null;
+  /**
+   * El proveedor de verdad, cuando el gasto es un pago a su cuenta.
+   *
+   * Es lo que baja la deuda: la deuda es la suma de sus compras menos la suma
+   * de los gastos que apuntan acá.
+   */
+  proveedorId: string | null;
   comprobante: string | null;
   notas: string | null;
   /** El turno del que salió la plata, si se pagó del cajón. */
@@ -276,6 +530,11 @@ export interface Caja {
   /** Lo contado al cerrar. Nulo mientras siga abierta. */
   contado: number | null;
   nota: string | null;
+  /** Quién abrió el turno y quién lo cerró. Null antes de los usuarios. */
+  abrioId: string | null;
+  abrio: string | null;
+  cerroId: string | null;
+  cerro: string | null;
   abiertaEn: Fecha;
   cerradaEn: Fecha | null;
   movimientos: MovimientoCaja[];

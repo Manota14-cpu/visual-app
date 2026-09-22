@@ -509,7 +509,7 @@ $Lienzo = [System.Drawing.Color]::FromArgb(245, 245, 247)
 $Tinta = [System.Drawing.Color]::FromArgb(29, 29, 31)
 $Suave = [System.Drawing.Color]::FromArgb(110, 110, 115)
 $Linea = [System.Drawing.Color]::FromArgb(228, 228, 232)
-$Azul = [System.Drawing.Color]::FromArgb(0, 113, 227)
+$Azul = [System.Drawing.Color]::FromArgb(0, 80, 206)
 $Rojo = [System.Drawing.Color]::FromArgb(194, 35, 26)
 
 function Letra($tamano, $estilo = [System.Drawing.FontStyle]::Regular) {

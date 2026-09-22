@@ -2,58 +2,139 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icono, type NombreIcono } from "@/components/iconos";
+import { Boton, Dialogo } from "@/components/ui";
 import { useDatos, useLatido } from "@/lib/datos";
+import { useSesion } from "@/lib/sesion";
 import type { Sistema } from "@/lib/tipos";
 
-const secciones: { nombre: string; href: string; icono: NombreIcono }[] = [
-  { nombre: "Panel", href: "/panel", icono: "panel" },
-  { nombre: "Caja", href: "/caja", icono: "caja" },
-  { nombre: "Productos", href: "/productos", icono: "productos" },
-  { nombre: "Ventas", href: "/ventas", icono: "pedidos" },
-  { nombre: "Clientes", href: "/clientes", icono: "clientes" },
-  { nombre: "Gastos", href: "/gastos", icono: "gastos" },
-  { nombre: "Informes", href: "/informes", icono: "informes" },
-  { nombre: "Movimientos", href: "/movimientos", icono: "movimientos" },
-];
+type Seccion = { nombre: string; href: string; icono: NombreIcono; soloDueno?: boolean };
 
 /**
- * El monograma, dibujado con las mismas proporciones que el ícono del programa.
+ * Las secciones, agrupadas por cuándo se usan, con quien puede entrar a cada una.
  *
- * Lleva la baldosa azul igual que el ícono, y no el trazo suelto de antes. Que
- * la marca sea la misma en la barra de tareas, en el escritorio y arriba de la
- * columna es la mitad de lo que hace que un programa se vea terminado; y de
- * paso es el único lugar del marco donde aparece el color de la marca, que
- * hasta acá vivía nada más que en los botones.
+ * Doce renglones seguidos son una lista que hay que leer entera para encontrar
+ * algo. En tres grupos se busca primero el grupo y después el renglón: lo de
+ * todos los días arriba, lo del depósito en el medio y los números del negocio
+ * abajo, que es también el orden en que se usan a lo largo de la semana.
  *
- * Tres trazos, no cuatro: la pata derecha de la V y la izquierda de la A son el
- * mismo trazo, así el encuentro entre las dos letras es un ángulo limpio. Y se
- * recortan contra una franja horizontal para que los remates queden planos, que
- * es como es la marca.
+ * `soloDueno` esconde el renglón; no es lo que lo impide. Lo que de verdad lo
+ * impide es el servidor, que comprueba el permiso en cada ruta. Esto existe
+ * para no ofrecerle a alguien una puerta que le va a dar en la cara.
+ */
+const grupos: { titulo: string; secciones: Seccion[] }[] = [
+  {
+    titulo: "Día a día",
+    secciones: [
+      { nombre: "Panel", href: "/panel", icono: "panel" },
+      { nombre: "Caja", href: "/caja", icono: "caja" },
+      { nombre: "Ventas", href: "/ventas", icono: "pedidos" },
+      { nombre: "Clientes", href: "/clientes", icono: "clientes" },
+    ],
+  },
+  {
+    titulo: "Depósito",
+    secciones: [
+      { nombre: "Productos", href: "/productos", icono: "productos" },
+      { nombre: "Movimientos", href: "/movimientos", icono: "movimientos" },
+      { nombre: "Vencimientos", href: "/vencimientos", icono: "reloj" },
+      { nombre: "Recuento", href: "/recuento", icono: "recuento", soloDueno: true },
+      { nombre: "Etiquetas", href: "/etiquetas", icono: "etiqueta", soloDueno: true },
+    ],
+  },
+  {
+    titulo: "Negocio",
+    secciones: [
+      { nombre: "Proveedores", href: "/proveedores", icono: "camion", soloDueno: true },
+      { nombre: "Gastos", href: "/gastos", icono: "gastos", soloDueno: true },
+      { nombre: "Informes", href: "/informes", icono: "informes", soloDueno: true },
+    ],
+  },
+];
+
+const secciones = grupos.flatMap((g) => g.secciones);
+
+const CONFIGURACION: Seccion = {
+  nombre: "Configuración",
+  href: "/configuracion",
+  icono: "ajustes",
+  soloDueno: true,
+};
+
+/**
+ * Las que van siempre a la vista en la barra del teléfono.
+ *
+ * Son las cuatro que se abren con el cliente adelante; el resto está a un
+ * toque, en "Más". Antes la barra mostraba las cinco primeras de la lista y un
+ * "Ajustes" que a quien atiende le daba una pantalla prohibida: vencimientos,
+ * movimientos y todo lo del dueño no se podían abrir desde el teléfono.
+ */
+const EN_LA_BARRA = ["/panel", "/caja", "/productos", "/ventas"];
+
+/**
+ * La marca, arriba de la columna.
+ *
+ * Es el mismo archivo que usa la pestaña del navegador y del que sale el ícono
+ * del programa, no un dibujo parecido hecho aparte. Que la marca sea idéntica
+ * en la barra de tareas, en el escritorio y arriba de la columna es la mitad de
+ * lo que hace que un programa se vea terminado.
+ *
+ * Va como imagen y no como SVG escrito acá adentro justamente por eso: el
+ * contorno vive en un solo lugar, `public/marca.svg`, y lo genera
+ * `herramientas/marca-derivada.mjs` desde el arte. Copiado a mano se
+ * desincroniza al primer retoque del logo.
+ *
+ * Decorativa: el nombre del programa está escrito al lado, así que un lector de
+ * pantalla que además lea la imagen lo diría dos veces.
  */
 function Marca() {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      className="h-9 w-9 shrink-0"
+    // Y como imagen suelta y no con <Image>: es un SVG de un kilo y medio que
+    // sirve el propio programa desde el disco, sin internet de por medio. No
+    // hay nada que optimizar, y Next no toca los SVG de todos modos.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/marca.svg"
+      alt=""
       aria-hidden="true"
-      focusable="false"
+      className="h-9 w-9 shrink-0"
+      draggable={false}
+    />
+  );
+}
+
+/**
+ * Un renglón de la columna.
+ *
+ * El elegido se pinta con el azul del logo: un fondo apenas teñido, la letra y
+ * el ícono en azul, y una raya a la izquierda que se ve de reojo sin tener que
+ * leer. Los demás van en gris y se tiñen apenas al pasar el mouse, del mismo
+ * azul, para que el que está por elegirse ya se parezca al elegido.
+ */
+function Renglon({ seccion, activa }: { seccion: Seccion; activa: boolean }) {
+  return (
+    <Link
+      href={seccion.href}
+      aria-current={activa ? "page" : undefined}
+      className={cn(
+        "group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-base transition-colors duration-200 ease-suave",
+        activa
+          ? "bg-acento-suave font-medium text-acento-texto before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-acento"
+          : "text-tinta-media hover:bg-acento-suave/60 hover:text-tinta"
+      )}
     >
-      <clipPath id="marca-franja">
-        <rect x="0" y="18" width="64" height="28" />
-      </clipPath>
-      <rect width="64" height="64" rx="14" className="fill-acento" />
-      <g clipPath="url(#marca-franja)" stroke="#FFFFFF" fill="none" strokeLinecap="butt">
-        <g strokeWidth="7.4">
-          <path d="M17 18 L27 46" />
-          <path d="M27 46 L37 18" />
-          <path d="M37 18 L47 46" />
-        </g>
-        <path d="M30.5 38.2 L43.5 38.2" strokeWidth="6.4" />
-      </g>
-    </svg>
+      <Icono
+        nombre={seccion.icono}
+        tamano={17}
+        className={
+          activa ? "text-acento" : "text-tinta-tenue transition-colors group-hover:text-acento/80"
+        }
+      />
+      {seccion.nombre}
+    </Link>
   );
 }
 
@@ -80,9 +161,58 @@ export function Marco({
 }) {
   const ruta = usePathname();
   const { datos: sistema } = useDatos<Sistema>("/sistema");
+  const { usuario, exigeIngreso, cargando, esDueno } = useSesion();
+  const [masAbierto, setMasAbierto] = useState(false);
 
   // Mientras haya una pantalla abierta, el programa sabe que sigue en uso.
   useLatido();
+
+  // Sin sesión no se dibuja nada y se va a la pantalla de ingreso. Entrar por
+  // la dirección escrita a mano es el caso normal —un acceso directo guardado,
+  // la pestaña de ayer— y sin esto se vería una pantalla armada con errores en
+  // cada tarjeta, que no explica nada.
+  const falta = exigeIngreso && !usuario;
+
+  useEffect(() => {
+    // Igual que al salir: recarga entera. Lo que se hubiera cargado antes de
+    // descubrir que falta la sesión no puede quedar en memoria.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    if (falta) window.location.href = "/ingresar";
+  }, [falta]);
+
+  if (cargando || falta) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-base text-tinta-suave">
+        Un momento…
+      </div>
+    );
+  }
+
+  const puede = (s: Seccion) => !s.soloDueno || esDueno;
+  const visibles = grupos
+    .map((g) => ({ ...g, secciones: g.secciones.filter(puede) }))
+    .filter((g) => g.secciones.length > 0);
+
+  // Lo que no entra en la barra del teléfono va en "Más", con los mismos
+  // grupos que la columna: quien usa las dos no tiene que aprender dos mapas.
+  const enLaBarra = secciones.filter((s) => EN_LA_BARRA.includes(s.href));
+  const enMas = [
+    ...visibles.map((g) => ({
+      ...g,
+      secciones: g.secciones.filter((s) => !EN_LA_BARRA.includes(s.href)),
+    })),
+    { titulo: "Programa", secciones: [CONFIGURACION].filter(puede) },
+  ].filter((g) => g.secciones.length > 0);
+  const masActiva = !enLaBarra.some((s) => ruta.startsWith(s.href));
+
+  // Escribir la dirección a mano llega igual: la columna esconde el renglón,
+  // pero no la URL. El servidor devuelve 403 y sin esto la pantalla quedaba en
+  // blanco —protegida, pero sin decir por qué—, que es un callejón sin salida.
+  const vedada =
+    !esDueno &&
+    [...secciones.filter((s) => s.soloDueno).map((s) => s.href), CONFIGURACION.href].some(
+      (href) => ruta.startsWith(href)
+    );
 
   return (
     <div className="flex min-h-screen">
@@ -90,7 +220,7 @@ export function Marco({
         className="sin-imprimir vidrio sticky top-0 z-30 hidden h-screen w-[236px] shrink-0 flex-col border-r border-black/[0.06] px-3 py-5 lg:flex"
         aria-label="Navegación principal"
       >
-        <Link href="/panel" className="mb-7 flex items-center gap-2.5 px-2">
+        <Link href="/panel" className="mb-5 flex items-center gap-2.5 px-2">
           <Marca />
           <span className="min-w-0">
             <span className="block truncate font-titulo text-medio font-semibold leading-5">Visual App</span>
@@ -100,53 +230,37 @@ export function Marco({
           </span>
         </Link>
 
-        <nav className="flex flex-1 flex-col gap-0.5">
-          {secciones.map((seccion) => {
-            const activa = ruta.startsWith(seccion.href);
-            return (
-              <Link
-                key={seccion.href}
-                href={seccion.href}
-                aria-current={activa ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded px-2.5 py-2 text-base transition-all duration-200 ease-suave",
-                  activa
-                    ? "bg-papel font-medium text-tinta shadow-apoyo"
-                    : "text-tinta-suave hover:bg-black/[0.035] hover:text-tinta"
-                )}
-              >
-                <Icono
-                  nombre={seccion.icono}
-                  tamano={17}
-                  className={activa ? "text-acento" : undefined}
+        {/* En una pantalla baja —una notebook de 768 de alto— la lista entera
+            no entra: se desplaza ella sola y la marca y la sesión quedan fijas. */}
+        <nav className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1">
+          {visibles.map((grupo, i) => (
+            <div key={grupo.titulo} className={cn("flex flex-col gap-0.5", i > 0 && "mt-4")}>
+              <p className="etiqueta-campo px-2.5 pb-1">{grupo.titulo}</p>
+              {grupo.secciones.map((seccion) => (
+                <Renglon
+                  key={seccion.href}
+                  seccion={seccion}
+                  activa={ruta.startsWith(seccion.href)}
                 />
-                {seccion.nombre}
-              </Link>
-            );
-          })}
+              ))}
+            </div>
+          ))}
         </nav>
 
-        <Link
-          href="/configuracion"
-          aria-current={ruta.startsWith("/configuracion") ? "page" : undefined}
-          className={cn(
-            "flex items-center gap-2.5 rounded px-2.5 py-2 text-base transition-all duration-200 ease-suave",
-            ruta.startsWith("/configuracion")
-              ? "bg-papel font-medium text-tinta shadow-apoyo"
-              : "text-tinta-suave hover:bg-black/[0.035] hover:text-tinta"
-          )}
-        >
-          <Icono
-            nombre="ajustes"
-            tamano={17}
-            className={ruta.startsWith("/configuracion") ? "text-acento" : undefined}
-          />
-          Configuración
-        </Link>
+        {esDueno && (
+          <div className="mt-2">
+            <Renglon seccion={CONFIGURACION} activa={ruta.startsWith(CONFIGURACION.href)} />
+          </div>
+        )}
+
+        {usuario && <QuienEsta />}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sin-imprimir vidrio sticky top-0 z-20 border-b border-black/[0.06] px-4 py-4 lg:px-8 lg:py-6">
+        {/* En el teléfono el encabezado es alto —título, descripción y
+            botones— y la lista pasa por debajo a pocos píxeles del texto: con
+            el vidrio fino se leían las dos cosas encimadas. Ahí va opaco. */}
+        <header className="sin-imprimir vidrio sticky top-0 z-20 border-b border-black/[0.06] px-4 py-4 max-lg:bg-lienzo lg:px-8 lg:py-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <h1 className="font-titulo text-titulo font-semibold">{titulo}</h1>
@@ -158,33 +272,188 @@ export function Marco({
           </div>
         </header>
 
-        <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-12">{children}</main>
+        <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-12">
+          {vedada ? <SoloElDueno /> : children}
+        </main>
 
+        {/* Casi opaca: el vidrio fino dejaba pasar los números de la lista por
+            debajo de los rótulos, y a un rótulo de once píxeles eso lo vuelve
+            ilegible. Queda un rastro de desenfoque para que no parezca pegada. */}
         <nav
-          className="sin-imprimir vidrio-denso fixed bottom-0 left-0 right-0 z-30 flex items-stretch justify-between border-t border-black/[0.07] pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="sin-imprimir fixed bottom-0 left-0 right-0 z-30 flex items-stretch justify-between border-t border-black/[0.08] bg-papel/[0.96] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.12)] backdrop-blur-xl lg:hidden"
           aria-label="Secciones"
         >
-          {[...secciones.slice(0, 5), { nombre: "Ajustes", href: "/configuracion", icono: "ajustes" as const }].map(
-            (seccion) => {
-              const activa = ruta.startsWith(seccion.href);
-              return (
-                <Link
-                  key={seccion.href}
-                  href={seccion.href}
-                  aria-current={activa ? "page" : undefined}
-                  className={cn(
-                    "flex flex-1 flex-col items-center gap-1 py-2 text-micro transition-colors",
-                    activa ? "text-acento" : "text-tinta-tenue"
-                  )}
-                >
-                  <Icono nombre={seccion.icono} tamano={20} />
-                  {seccion.nombre}
-                </Link>
-              );
-            }
-          )}
+          {enLaBarra.map((seccion) => {
+            const activa = ruta.startsWith(seccion.href);
+            return (
+              <Link
+                key={seccion.href}
+                href={seccion.href}
+                aria-current={activa ? "page" : undefined}
+                className={cn(
+                  "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 py-2 text-micro transition-colors",
+                  activa ? "font-medium text-acento" : "text-tinta-suave"
+                )}
+              >
+                <Icono nombre={seccion.icono} tamano={20} />
+                {seccion.nombre}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMasAbierto(true)}
+            aria-haspopup="dialog"
+            className={cn(
+              "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 py-2 text-micro transition-colors",
+              masActiva ? "font-medium text-acento" : "text-tinta-suave"
+            )}
+          >
+            <Icono nombre="puntos" tamano={20} />
+            Más
+          </button>
         </nav>
+
+        <Dialogo
+          abierto={masAbierto}
+          onCerrar={() => setMasAbierto(false)}
+          titulo="Todas las secciones"
+          descripcion={sistema?.config.negocio}
+          ancho="max-w-md"
+          pie={usuario ? <QuienEstaEnElTelefono /> : undefined}
+        >
+          <div className="flex flex-col gap-4">
+            {enMas.map((grupo) => (
+              <div key={grupo.titulo}>
+                <p className="etiqueta-campo mb-2">{grupo.titulo}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {grupo.secciones.map((seccion) => {
+                    const activa = ruta.startsWith(seccion.href);
+                    return (
+                      <Link
+                        key={seccion.href}
+                        href={seccion.href}
+                        onClick={() => setMasAbierto(false)}
+                        aria-current={activa ? "page" : undefined}
+                        className={cn(
+                          "flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-md px-1 py-2.5 text-center text-chico transition-colors",
+                          activa
+                            ? "bg-acento-suave font-medium text-acento-texto"
+                            : "bg-lienzo text-tinta-media active:bg-acento-suave"
+                        )}
+                      >
+                        <Icono
+                          nombre={seccion.icono}
+                          tamano={22}
+                          className={activa ? "text-acento" : "text-tinta-suave"}
+                        />
+                        {seccion.nombre}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Dialogo>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Quién tiene el programa abierto, al pie de la columna.
+ *
+ * Va abajo de todo y no arriba a propósito: es lo que menos se mira y lo que
+ * más molesta si compite con la marca. Pero tiene que estar a la vista, porque
+ * en un mostrador donde se turnan dos personas, cobrar con la sesión del otro
+ * es un error fácil y silencioso.
+ */
+function QuienEsta() {
+  const { usuario, salir } = useSesion();
+  const [saliendo, setSaliendo] = useState(false);
+
+  if (!usuario) return null;
+
+  return (
+    <div className="mt-2 border-t border-black/[0.06] px-2.5 pt-3">
+      <p className="truncate text-base font-medium leading-5">{usuario.nombre}</p>
+      <p className="text-micro text-tinta-tenue">
+        {usuario.rol === "dueno" ? "Dueño" : "Atiende"}
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          setSaliendo(true);
+          void salir();
+        }}
+        disabled={saliendo}
+        className="mt-1.5 flex items-center gap-1.5 text-chico text-tinta-suave transition-colors hover:text-tinta"
+      >
+        <Icono nombre="salir" tamano={14} />
+        {saliendo ? "Saliendo…" : "Salir"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Lo mismo, al pie de "Más" en el teléfono.
+ *
+ * Antes no había forma de salir desde un teléfono: la columna, que es donde
+ * está el botón, no se muestra en pantallas chicas. Con un teléfono que queda
+ * en el mostrador, eso era dejar la sesión del dueño abierta para cualquiera.
+ */
+function QuienEstaEnElTelefono() {
+  const { usuario, salir } = useSesion();
+  const [saliendo, setSaliendo] = useState(false);
+
+  if (!usuario) return null;
+
+  return (
+    <>
+      <div className="mr-auto min-w-0">
+        <p className="truncate text-base font-medium leading-5">{usuario.nombre}</p>
+        <p className="text-micro text-tinta-tenue">
+          {usuario.rol === "dueno" ? "Dueño" : "Atiende"}
+        </p>
+      </div>
+      <Boton
+        icono="salir"
+        disabled={saliendo}
+        onClick={() => {
+          setSaliendo(true);
+          void salir();
+        }}
+      >
+        {saliendo ? "Saliendo…" : "Salir"}
+      </Boton>
+    </>
+  );
+}
+
+/**
+ * Lo que ve quien atiende si llega a una pantalla del dueño.
+ *
+ * Explica y ofrece una salida. Un "403" o una pantalla en blanco dejan a la
+ * persona pensando que el programa se rompió, y la siguiente llamada es al que
+ * lo vendió.
+ */
+function SoloElDueno() {
+  return (
+    <div className="hoja mx-auto max-w-md p-6 text-center">
+      <p className="text-base font-medium">Esta pantalla es del dueño.</p>
+      <p className="mt-1.5 text-base text-tinta-suave">
+        Acá están los costos, las ganancias y los números del negocio. Con tu usuario podés cobrar,
+        hacer devoluciones, cargar stock y ver el catálogo y los clientes.
+      </p>
+      <Link
+        href="/caja"
+        className="mt-4 inline-flex items-center gap-1.5 text-base font-medium text-acento hover:underline"
+      >
+        <Icono nombre="caja" tamano={16} />
+        Ir a la caja
+      </Link>
     </div>
   );
 }

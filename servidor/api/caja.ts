@@ -1,4 +1,5 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
+import { selloDe } from "../usuarios.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
 import {
   ajustarStock,
@@ -75,6 +76,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
             numero: c.numero,
             estado: c.estado,
             fondo: c.fondo,
+            abrio: c.abrio,
+            cerro: c.cerro,
             contado: c.contado,
             abiertaEn: c.abiertaEn,
             cerradaEn: c.cerradaEn,
@@ -96,7 +99,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/abrir", ({ cuerpo }) =>
+  r.post("/caja/abrir", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       // Uno solo a la vez: con dos turnos abiertos sería imposible saber a cuál
       // pertenece cada cobro, y ninguno de los dos cierres cerraría.
@@ -109,6 +112,10 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         fondo: Math.min(Math.max(entero(cuerpo.fondo, 0), 0), 99_999_999),
         contado: null,
         nota: recortar(cuerpo.nota as string, 200),
+        abrioId: usuario?.id ?? null,
+        abrio: usuario?.nombre ?? null,
+        cerroId: null,
+        cerro: null,
         abiertaEn: new Date().toISOString(),
         cerradaEn: null,
         movimientos: [],
@@ -119,7 +126,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/movimiento", ({ cuerpo }) =>
+  r.post("/caja/movimiento", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const caja = exigirCajaAbierta(d, String(cuerpo.cajaId ?? ""));
       const tipo = cuerpo.tipo === "ingreso" ? "ingreso" : cuerpo.tipo === "retiro" ? "retiro" : null;
@@ -145,11 +152,25 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/cobrar", ({ cuerpo }) =>
+  r.post("/caja/cobrar", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const caja = exigirCajaAbierta(d, String(cuerpo.cajaId ?? ""));
       const items = validarItems(d, cuerpo.items, "cobrar");
-      const total = items.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
+      const subtotal = items.reduce(
+        (s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso),
+        0
+      );
+
+      // El descuento se guarda aparte del precio de los renglones. Bajando el
+      // precio la venta cierra igual, pero se pierde el dato de que hubo
+      // descuento: después no se puede saber cuánta plata se regaló.
+      const descuento = entero(cuerpo.descuento, 0);
+      if (descuento < 0) throw new Regla("El descuento no puede ser negativo.");
+      if (descuento > subtotal) {
+        throw new Regla("El descuento no puede ser mayor que la venta.");
+      }
+
+      const total = subtotal - descuento;
 
       const pagos = (Array.isArray(cuerpo.pagos) ? cuerpo.pagos : []) as {
         metodo: string;
@@ -190,6 +211,14 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         if (pagado === total) {
           throw new Regla("Esta venta se pago entera: no queda nada fiado.");
         }
+      } else if (total === 0) {
+        // Una venta que quedó en cero —un descuento del cien por ciento, un
+        // reemplazo por algo fallado— no se puede pagar: un pago tiene que ser
+        // mayor a cero. Sin esta rama la venta no se podía cerrar de ninguna
+        // manera, y el stock quedaba sin descontar.
+        if (pagado !== 0) {
+          throw new Regla("Esta venta quedó en cero: no hay nada para cobrar.");
+        }
       } else {
         if (limpios.length === 0) throw new Regla("Falta indicar cómo se pagó.");
         if (pagado !== total) {
@@ -218,6 +247,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         metodoPago: fiar ? "fiado" : metodos.size === 1 ? limpios[0]!.metodo : "mixto",
         recibido: recibido > 0 ? recibido : null,
         cajaId: caja.id,
+        descuento,
+        ...selloDe(usuario),
         pagos: limpios,
         items: [],
         creadoEn: new Date().toISOString(),
@@ -236,7 +267,14 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         });
 
         if (item.productoId) {
-          ajustarStock(d, item.productoId, -item.cantidad, `Venta mostrador #${pedido.numero}`, "venta");
+          ajustarStock(
+            d,
+            item.productoId,
+            -item.cantidad,
+            `Venta mostrador #${pedido.numero}`,
+            "venta",
+            usuario
+          );
         }
       }
 
@@ -258,7 +296,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/devolver", ({ cuerpo }) =>
+  r.post("/caja/devolver", ({ cuerpo, usuario }) =>
     a.escribir((d) => {
       const caja = exigirCajaAbierta(d, String(cuerpo.cajaId ?? ""));
       const items = validarItems(d, cuerpo.items, "devolver");
@@ -292,6 +330,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         metodoPago: metodo,
         recibido: null,
         cajaId: caja.id,
+        descuento: 0,
+        ...selloDe(usuario),
         pagos: [{ metodo, monto: -total }],
         items: [],
         creadoEn: new Date().toISOString(),
@@ -310,7 +350,14 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         });
 
         if (item.productoId) {
-          ajustarStock(d, item.productoId, item.cantidad, `Devolución #${pedido.numero}`, "devolucion");
+          ajustarStock(
+            d,
+            item.productoId,
+            item.cantidad,
+            `Devolución #${pedido.numero}`,
+            "devolucion",
+            usuario
+          );
         }
       }
 
@@ -373,7 +420,7 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
     })
   );
 
-  r.post("/caja/cerrar", ({ cuerpo }) => {
+  r.post("/caja/cerrar", ({ cuerpo, usuario }) => {
     const cierre = a.escribir((d) => {
       const caja = d.cajas.find((c) => c.id === cuerpo.cajaId);
       if (!caja) throw new Regla("Esa caja no existe.");
@@ -390,6 +437,8 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       caja.estado = "cerrada";
       caja.contado = contado;
       caja.nota = recortar(cuerpo.nota as string, 400) ?? caja.nota;
+      caja.cerroId = usuario?.id ?? null;
+      caja.cerro = usuario?.nombre ?? null;
       caja.cerradaEn = new Date().toISOString();
 
       return {
@@ -483,8 +532,14 @@ export function vista(d: BaseDatos, caja: Caja) {
     fondo: caja.fondo,
     contado: caja.contado,
     nota: caja.nota,
+    abrio: caja.abrio,
+    cerro: caja.cerro,
     abiertaEn: caja.abiertaEn,
     cerradaEn: caja.cerradaEn,
+
+    // Cuánta plata se regaló en el turno. Sin esto, un descuento del 20% en
+    // cada venta se ve solamente como "se vendió menos".
+    descuentos: ventas.reduce((s, v) => s + (v.descuento ?? 0), 0),
 
     ventas: ventas.map((v) => ({
       id: v.id,
@@ -495,6 +550,8 @@ export function vista(d: BaseDatos, caja: Caja) {
       metodoPago: v.metodoPago ?? "efectivo",
       notas: v.notas,
       creadoEn: v.creadoEn,
+      usuario: v.usuario,
+      descuento: v.descuento ?? 0,
       renglones: v.items.length,
       unidades: contarRenglones(v.items).unidades,
       gramos: contarRenglones(v.items).gramos,

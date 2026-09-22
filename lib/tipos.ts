@@ -55,6 +55,8 @@ export interface ProductoBuscado {
   id: string;
   nombre: string;
   sku: string | null;
+  /** El de fábrica, si lo tiene. Es el que va en la etiqueta. */
+  codigoBarras: string | null;
   /** Por kilo si el producto se vende por peso. */
   precio: number;
   /** En gramos si el producto se vende por peso. */
@@ -86,6 +88,8 @@ export interface FilaPrecio {
 }
 
 export interface Movimiento {
+  /** Quién lo hizo. Null en lo anterior a los usuarios. */
+  usuario?: string | null;
   id: string;
   productoId: string;
   producto: string;
@@ -123,6 +127,8 @@ export interface Pago {
 }
 
 export interface Pedido {
+  /** Quién hizo la venta. Null en lo anterior a los usuarios. */
+  usuario?: string | null;
   id: string;
   numero: number;
   canal: string;
@@ -169,6 +175,8 @@ export interface VentaCaja {
   metodoPago: string;
   notas: string | null;
   creadoEn: Fecha;
+  /** Quién la cobró. Null en lo anterior a los usuarios. */
+  usuario?: string | null;
   renglones: number;
   unidades: number;
   /** Gramos, si la venta tenía productos por peso. */
@@ -190,6 +198,9 @@ export interface Caja {
   fondo: number;
   contado: number | null;
   nota: string | null;
+  /** Quién abrió el turno y quién lo cerró. Null antes de los usuarios. */
+  abrio?: string | null;
+  cerro?: string | null;
   abiertaEn: Fecha;
   cerradaEn: Fecha | null;
   ventas: VentaCaja[];
@@ -217,6 +228,9 @@ export interface CajaResumen {
   estado: string;
   fondo: number;
   contado: number | null;
+  /** Quién abrió y quién cerró. Null antes de los usuarios. */
+  abrio?: string | null;
+  cerro?: string | null;
   abiertaEn: Fecha;
   cerradaEn: Fecha | null;
   ventas: number;
@@ -324,8 +338,9 @@ export interface Panel {
     unidades: number;
     /** Gramos de los productos que se venden por peso. */
     gramos: number;
-    valorCosto: number;
-    valorVenta: number;
+    /** Null para un empleado: lo que vale el depósito es cuenta del dueño. */
+    valorCosto: number | null;
+    valorVenta: number | null;
     bajo: number;
     sinStock: number;
     inactivos: number;
@@ -335,9 +350,15 @@ export interface Panel {
     sinSku: number;
     costoDudoso: number;
     pedidos: number;
+    /** Partidas vencidas y a punto de vencer. Las ve también un empleado. */
+    vencidos: number;
+    porVencer: number;
   };
   /** Plata del negocio que está en la calle: lo que deben los clientes. */
-  fiado: number;
+  /** Lo que le deben al negocio. Null para un empleado. */
+  fiado: number | null;
+  /** Lo que el negocio debe a proveedores. Null para un empleado. */
+  aProveedores: number | null;
   hoyVentas: { cantidad: number; total: number; unidades: number; gramos: number };
   caja: {
     id: string;
@@ -353,6 +374,8 @@ export interface Panel {
     stock: number;
     stockMinimo: number;
     unidadMedida: string;
+    /** En gramos si es por peso: sin esto "quedan 1.450" no dice kilo y medio. */
+    porPeso: boolean;
   }[];
   movimientos: {
     id: string;
@@ -362,9 +385,17 @@ export interface Panel {
     motivo: string | null;
     creadoEn: Fecha;
     producto: string;
+    porPeso: boolean;
   }[];
   ventasPorDia: { dia: string; total: number }[];
-  stockPorCategoria: { categoria: string; color: string | null; unidades: number }[];
+  /** Unidades y gramos por separado: sumarlos juntos no significa nada. */
+  stockPorCategoria: {
+    categoria: string;
+    color: string | null;
+    productos: number;
+    unidades: number;
+    gramos: number;
+  }[];
 }
 
 // ────────────────────────────  Informes  ────────────────────────────
@@ -374,7 +405,10 @@ export interface Informe {
   ventas: {
     pedidos: number;
     unidades: number;
+    /** Lo que de verdad entró: a precio de lista menos descuentos. */
     ingreso: number;
+    aPrecioDeLista: number;
+    descuentos: number;
     costo: number;
     margen: number | null;
     margenCosto: number | null;
@@ -388,7 +422,9 @@ export interface Informe {
   porProducto: {
     productoId: string | null;
     nombre: string;
+    /** En gramos si el producto es por peso. */
     unidades: number;
+    porPeso: boolean;
     ingreso: number;
     costo: number;
     margen: number | null;
@@ -400,12 +436,22 @@ export interface Informe {
     categoria: string | null;
     stock: number;
     unidadMedida: string;
+    porPeso: boolean;
     capital: number;
     diasQuieto: number | null;
   }[];
   capitalQuieto: number;
   movimientos: { tipo: string; cantidad: number }[];
   porCanal: { canal: string; pedidos: number; ingreso: number }[];
+  /** Quién vendió qué en el período. */
+  porUsuario: {
+    usuario: string;
+    ventas: number;
+    vendido: number;
+    descuentos: number;
+    devoluciones: number;
+    devuelto: number;
+  }[];
   ventasConCostoDudoso: number;
   gastos: {
     total: number;
@@ -419,15 +465,112 @@ export interface Informe {
 
 // ────────────────────────────  Sistema  ────────────────────────────
 
+// ──────────────────────────────  Proveedores  ──────────────────────────────
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  cuit: string | null;
+  notas: string | null;
+  activo: boolean;
+  /** Lo que el negocio le debe hoy. Se deduce, no se guarda. */
+  deuda: number;
+  compras: number;
+  ultimaCompra: string | null;
+  creadoEn: Fecha;
+}
+
+/** Un renglón de la cuenta corriente: sube si es compra, baja si es pago. */
+export interface MovimientoProveedor {
+  tipo: "compra" | "pago";
+  id: string;
+  fecha: string;
+  detalle: string;
+  comprobante: string | null;
+  monto: number;
+  usuario: string | null;
+}
+
+export interface CuentaProveedor {
+  proveedor: Proveedor;
+  movimientos: MovimientoProveedor[];
+  comprado: number;
+  pagado: number;
+  deuda: number;
+}
+
+// ───────────────────────────────  Recuento  ───────────────────────────────
+
+export interface PlanillaRecuento {
+  categoria: string | null;
+  productos: {
+    id: string;
+    nombre: string;
+    sku: string | null;
+    codigoBarras: string | null;
+    precio: number;
+    categoria: string | null;
+    unidadMedida: string;
+    porPeso: boolean;
+    /** Lo que dice el sistema ahora mismo. */
+    esperado: number;
+  }[];
+}
+
+export interface ResumenRecuento {
+  id: string;
+  fecha: string;
+  categoria: string | null;
+  usuario: string | null;
+  contados: number;
+  coinciden: number;
+  faltantes: number;
+  sobrantes: number;
+  /** Cuánta plata falta, no solo cuántas unidades. */
+  valorFaltante: number;
+  valorSobrante: number;
+  creadoEn: Fecha;
+}
+
+/** Los dos roles. Ver `servidor/tipos.ts` para qué puede cada uno. */
+export type Rol = "dueno" | "empleado";
+
+export interface UsuarioSesion {
+  id: string;
+  nombre: string;
+  usuario: string;
+  rol: Rol;
+  activo: boolean;
+  creadoEn: Fecha;
+  ultimoIngreso: Fecha | null;
+}
+
+/**
+ * Lo que devuelve `/sistema`.
+ *
+ * Casi todo es opcional porque a un empleado le llega solo el nombre del
+ * negocio: dónde vive el archivo, cuánto hay cargado y cómo viene la copia de
+ * seguridad son cuentas del dueño. El tipo lo dice para que la pantalla tenga
+ * que contemplarlo en vez de romperse.
+ */
 export interface Sistema {
-  archivo: string;
-  carpeta: string;
-  carpetaCopias: string;
-  tamano: number;
-  version: number;
   programa: string;
-  config: { negocio: string; detalle: string | null; creadaEn: Fecha };
-  conteos: {
+  archivo?: string;
+  carpeta?: string;
+  carpetaCopias?: string;
+  tamano?: number;
+  version?: number;
+  config: {
+    negocio: string;
+    detalle: string | null;
+    /** Carpeta de afuera donde se deja la copia de cada día. Solo al dueño. */
+    resguardo?: string | null;
+    creadaEn?: Fecha;
+  };
+  conteos?: {
     categorias: number;
     productos: number;
     movimientos: number;
@@ -437,7 +580,24 @@ export interface Sistema {
     cajas: number;
     cambiosPrecio: number;
   };
-  copias: { nombre: string; tamano: number; fecha: Fecha }[];
+  copias?: { nombre: string; tamano: number; fecha: Fecha }[];
+  /**
+   * Cómo viene la copia fuera de la computadora.
+   *
+   * `dias` cuenta desde la última: es con lo que el Panel decide si avisar.
+   * `error` tiene texto solo si el destino no responde ahora mismo —el
+   * pendrive desenchufado, la carpeta de red caída—, que es distinto de que
+   * nunca se haya configurado.
+   */
+  resguardo?: {
+    carpeta: string | null;
+    ultima: string | null;
+    dias: number | null;
+    copias: number;
+    error: string | null;
+    /** Las copias que hay en esa carpeta, para poder volver a una. */
+    archivos: { nombre: string; fecha: Fecha | null }[];
+  };
 }
 
 // ─────────────────────────  Exportar e importar  ─────────────────────────

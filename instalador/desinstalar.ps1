@@ -237,7 +237,7 @@ $aceptar.Add_Click({
 
     $cancelar.Visible = $false
     $aceptar.Text = "Cerrar"
-    $aceptar.BackColor = [System.Drawing.Color]::FromArgb(0, 113, 227)
+    $aceptar.BackColor = [System.Drawing.Color]::FromArgb(0, 80, 206)
     $aceptar.Enabled = $true
     $script:hecho = $true
 })

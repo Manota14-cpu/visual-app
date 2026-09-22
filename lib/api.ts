@@ -26,6 +26,11 @@ async function pedir<T>(ruta: string, opciones?: RequestInit): Promise<T> {
   try {
     respuesta = await fetch(`${BASE}/api${ruta}`, {
       ...opciones,
+      // La sesión viaja en una cookie. En el paquete la interfaz y la API son
+      // el mismo origen y la cookie iría sola; en desarrollo la pantalla corre
+      // en otro puerto, y sin esto el navegador no la manda y todo contesta
+      // "entrá con tu usuario" aunque la sesión esté abierta.
+      credentials: "include",
       headers: { "Content-Type": "application/json", ...opciones?.headers },
     });
   } catch {

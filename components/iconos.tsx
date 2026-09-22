@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 /**
  * Los íconos, dibujados acá adentro.
  *
- * Son quince trazos: traer una biblioteca entera para eso agrega un paquete
+ * Son unos treinta trazos: traer una biblioteca entera para eso agrega un paquete
  * más al instalador y, sobre todo, le da a la aplicación el mismo dibujo que
  * tienen todas. Un grosor único (1.6) y una grilla de 24 alcanzan para que se
  * vean como un juego.
@@ -38,7 +38,10 @@ export type NombreIcono =
   | "archivo"
   | "etiqueta"
   | "reloj"
-  | "salir";
+  | "salir"
+  | "camion"
+  | "recuento"
+  | "puntos";
 
 const trazos: Record<NombreIcono, ReactNode> = {
   panel: (
@@ -175,6 +178,32 @@ const trazos: Record<NombreIcono, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 7v5.2l3.2 2" />
+    </>
+  ),
+  // Proveedores: el que trae la mercadería. Antes compartían el dibujo de
+  // clientes, y en la columna eran dos renglones con la misma cara.
+  camion: (
+    <>
+      <path d="M13.5 17V5.5H4a1 1 0 0 0-1 1V16a1 1 0 0 0 1 1h1.1M8.9 17h6.2" />
+      <path d="M13.5 9h4l3 3.6V16a1 1 0 0 1-1 1h-.6" />
+      <circle cx="7" cy="17" r="1.9" />
+      <circle cx="17" cy="17" r="1.9" />
+    </>
+  ),
+  // Recuento: la planilla con el tilde de "contado".
+  recuento: (
+    <>
+      <path d="M8.5 4.5h-2A1.5 1.5 0 0 0 5 6v13.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-2" />
+      <rect x="8.5" y="3" width="7" height="3" rx="1" />
+      <path d="m9 13.5 2.2 2.2 4.3-4.5" />
+    </>
+  ),
+  // "Más", en la barra del teléfono: los tres puntos de siempre.
+  puntos: (
+    <>
+      <circle cx="5.5" cy="12" r="1.4" />
+      <circle cx="12" cy="12" r="1.4" />
+      <circle cx="18.5" cy="12" r="1.4" />
     </>
   ),
   salir: (

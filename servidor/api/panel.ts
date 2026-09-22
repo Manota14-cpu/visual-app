@@ -1,8 +1,10 @@
 import type { Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
+import { vencimientosPendientes } from "./vencimientos.ts";
 import {
   cajaAbierta,
   contarRenglones,
+  deudaProveedores,
   deudaTotal,
   esperadoEn,
   importeRenglon,
@@ -16,9 +18,12 @@ import {
  * abre a la mañana y pedirlos de a uno hacía que aparecieran en cascada.
  */
 export function rutasPanel(r: Ruteador, a: Almacen): void {
-  r.get("/panel", () =>
+  r.get("/panel", ({ usuario }) =>
     a.leer((d) => {
       const activos = d.productos.filter((p) => p.activo);
+      // Un empleado ve el mostrador, no la contabilidad: nada de cuánto vale el
+      // depósito, cuánto costó, ni cuánta plata hay fiada en la calle.
+      const esDueno = !usuario || usuario.rol === "dueno";
       const hoy = diaLocal(new Date());
 
       const ventasDeHoy = d.pedidos.filter(
@@ -37,14 +42,12 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
           // Por la misma regla que un renglón de venta: un producto por peso
           // guarda su stock en gramos y su precio por kilo, así que
           // multiplicarlos a secas da mil veces de más.
-          valorCosto: activos.reduce(
-            (s, p) => s + importeRenglon(p.precioCosto ?? 0, p.stock, p.porPeso),
-            0
-          ),
-          valorVenta: activos.reduce(
-            (s, p) => s + importeRenglon(p.precioVenta, p.stock, p.porPeso),
-            0
-          ),
+          valorCosto: esDueno
+            ? activos.reduce((s, p) => s + importeRenglon(p.precioCosto ?? 0, p.stock, p.porPeso), 0)
+            : null,
+          valorVenta: esDueno
+            ? activos.reduce((s, p) => s + importeRenglon(p.precioVenta, p.stock, p.porPeso), 0)
+            : null,
           bajo: activos.filter((p) => p.stock <= p.stockMinimo && p.stock > 0).length,
           sinStock: activos.filter((p) => p.stock === 0).length,
           inactivos: d.productos.filter((p) => !p.activo).length,
@@ -53,21 +56,35 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
         // Datos que faltan y que hacen mentir a otros números: sin costo
         // cargado, el valor del inventario y todo margen son adornos.
         pendientes: {
-          sinCosto: activos.filter((p) => (p.precioCosto ?? 0) === 0).length,
-          sinSku: activos.filter((p) => !p.sku).length,
+          sinCosto: esDueno ? activos.filter((p) => (p.precioCosto ?? 0) === 0).length : 0,
+          sinSku: esDueno ? activos.filter((p) => !p.sku).length : 0,
           // Un costo que deja más del 85% de margen no es un costo: es un
           // relleno para sacarse de encima el aviso de que falta.
-          costoDudoso: activos.filter(
-            (p) => p.precioVenta > 0 && (p.precioCosto ?? 0) > 0 && p.precioCosto! < p.precioVenta * 0.15
-          ).length,
+          costoDudoso: esDueno
+            ? activos.filter(
+                (p) =>
+                  p.precioVenta > 0 &&
+                  (p.precioCosto ?? 0) > 0 &&
+                  p.precioCosto! < p.precioVenta * 0.15
+              ).length
+            : 0,
           pedidos: d.pedidos.filter((p) => p.estado === "pendiente" || p.estado === "preparando")
             .length,
+          // Lo que se vence es plata que se va a la basura si nadie la mira a
+          // tiempo. Esto sí lo ve un empleado: es lo que hay que sacar adelante
+          // en el mostrador, no una cuenta del negocio.
+          vencidos: vencimientosPendientes(d).vencidos,
+          porVencer: vencimientosPendientes(d).porVencer,
         },
 
         // Plata del negocio que esta en la calle. Sin esto, el Panel muestra
         // un stock y una caja que cierran, y no dice que ademas hay gente que
         // debe.
-        fiado: deudaTotal(d),
+        fiado: esDueno ? deudaTotal(d) : null,
+
+        // Y lo que el negocio DEBE. Sin esto el panel mostraba un stock y una
+        // caja que cerraban, y no decía que además hay que pagarle al molino.
+        aProveedores: esDueno ? deudaProveedores(d) : null,
 
         hoyVentas: {
           cantidad: ventasDeHoy.length,
@@ -97,6 +114,9 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
             stock: p.stock,
             stockMinimo: p.stockMinimo,
             unidadMedida: p.unidadMedida,
+            // Sin esto la pantalla no sabe que 1.450 son gramos, y muestra
+            // "quedan 1.450" de un producto que tiene kilo y medio.
+            porPeso: p.porPeso,
           })),
 
         movimientos: [...d.movimientos]
@@ -110,6 +130,7 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
             motivo: m.motivo,
             creadoEn: m.creadoEn,
             producto: d.productos.find((p) => p.id === m.productoId)?.nombre ?? "Producto eliminado",
+            porPeso: d.productos.find((p) => p.id === m.productoId)?.porPeso ?? false,
           })),
 
         // Catorce días es lo que entra legible en el gráfico y alcanza para ver
@@ -127,14 +148,23 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
           };
         }),
 
+        // Por categoría: cuántos productos, y cuánto hay de cada tipo POR
+        // SEPARADO. Antes se sumaba el stock a secas, y una categoría con 187
+        // unidades y 15,9 kg decía "16.087": gramos y unidades en la misma
+        // cuenta, un número que no significa nada.
         stockPorCategoria: d.categorias
-          .map((c) => ({
-            categoria: c.nombre,
-            color: c.color,
-            unidades: activos.filter((p) => p.categoriaId === c.id).reduce((s, p) => s + p.stock, 0),
-          }))
-          .filter((x) => x.unidades > 0)
-          .sort((x, y) => y.unidades - x.unidades)
+          .map((c) => {
+            const suyos = activos.filter((p) => p.categoriaId === c.id);
+            return {
+              categoria: c.nombre,
+              color: c.color,
+              productos: suyos.length,
+              unidades: suyos.filter((p) => !p.porPeso).reduce((s, p) => s + p.stock, 0),
+              gramos: suyos.filter((p) => p.porPeso).reduce((s, p) => s + p.stock, 0),
+            };
+          })
+          .filter((x) => x.productos > 0)
+          .sort((x, y) => y.productos - x.productos)
           .slice(0, 8),
       };
     })

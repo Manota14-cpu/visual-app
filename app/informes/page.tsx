@@ -16,8 +16,15 @@ import {
 } from "@/components/ui";
 import { BarrasEtiquetadas } from "@/components/grafico";
 import { useDatos } from "@/lib/datos";
-import { llevado, numero, plata, porcentaje } from "@/lib/formato";
+import { cantidadEscrita, llevado, numero, plata, porcentaje } from "@/lib/formato";
 import type { Informe } from "@/lib/tipos";
+
+/** Cómo se dice cada canal. En la base se guardan en minúscula y sin acento. */
+const NOMBRE_CANAL: Record<string, string> = {
+  mostrador: "Mostrador",
+  devolucion: "Devoluciones",
+  manual: "Carga manual",
+};
 
 const PERIODOS = [
   { dias: 7, etiqueta: "7 días" },
@@ -52,11 +59,18 @@ export default function PaginaInformes() {
 
       {datos && (
         <div className="flex flex-col gap-5">
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Metrica
               rotulo="Vendido"
               valor={plata(datos.ventas.ingreso)}
-              pie={`${numero(datos.ventas.pedidos)} ventas · ${llevado(datos.ventas.unidades, datos.ventas.gramos)}`}
+              pie={
+                // Lo que se regaló en descuentos va dicho acá, al lado de lo
+                // vendido: es de donde sale. Sin esto el dueño no tenía forma
+                // de saber cuánta plata se fue en rebajas.
+                datos.ventas.descuentos > 0
+                  ? `${numero(datos.ventas.pedidos)} ventas · ${plata(datos.ventas.descuentos)} en descuentos`
+                  : `${numero(datos.ventas.pedidos)} ventas · ${llevado(datos.ventas.unidades, datos.ventas.gramos)}`
+              }
             />
             <Metrica
               rotulo="Costó"
@@ -127,7 +141,9 @@ export default function PaginaInformes() {
                     {datos.porProducto.slice(0, 20).map((fila) => (
                       <tr key={fila.productoId ?? fila.nombre}>
                         <td className="max-w-[280px] truncate">{fila.nombre}</td>
-                        <td className="cifra text-right">{numero(fila.unidades)}</td>
+                        <td className="cifra whitespace-nowrap text-right">
+                          {cantidadEscrita(fila.unidades, fila.porPeso)}
+                        </td>
                         <td className="cifra text-right font-medium">{plata(fila.ingreso)}</td>
                         <td className="text-right">
                           <span className="cifra block text-tinta-suave">
@@ -147,13 +163,40 @@ export default function PaginaInformes() {
             </Hoja>
 
             <div className="flex flex-col gap-4">
+              {/* Solo tiene sentido con más de una persona: con una sola es
+                  repetir el total de arriba con otro nombre. */}
+              {datos.porUsuario.length > 1 && (
+                <Hoja titulo="Quién vendió" cuerpo="p-0">
+                  <ul>
+                    {datos.porUsuario.map((u) => (
+                      <li
+                        key={u.usuario}
+                        className="flex items-center justify-between gap-3 border-b border-linea px-4 py-2.5 last:border-0"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{u.usuario}</span>
+                          <span className="block truncate text-chico text-tinta-suave">
+                            {numero(u.ventas)} {u.ventas === 1 ? "venta" : "ventas"}
+                            {u.descuentos > 0 ? ` · ${plata(u.descuentos)} en descuentos` : ""}
+                            {u.devoluciones > 0
+                              ? ` · ${numero(u.devoluciones)} ${u.devoluciones === 1 ? "devolución" : "devoluciones"} por ${plata(u.devuelto)}`
+                              : ""}
+                          </span>
+                        </span>
+                        <span className="cifra shrink-0 font-medium">{plata(u.vendido)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Hoja>
+              )}
+
               <Hoja titulo="Por dónde vendiste">
                 {datos.porCanal.length === 0 ? (
                   <p className="py-4 text-center text-base text-tinta-suave">Sin ventas.</p>
                 ) : (
                   <BarrasEtiquetadas
                     datos={datos.porCanal.map((canal) => ({
-                      etiqueta: `${canal.canal} · ${numero(canal.pedidos)}`,
+                      etiqueta: `${NOMBRE_CANAL[canal.canal] ?? canal.canal} · ${numero(canal.pedidos)}`,
                       valor: canal.ingreso,
                     }))}
                     formato={(v) => plata(v)}
@@ -218,7 +261,7 @@ export default function PaginaInformes() {
                         <td className="max-w-[260px] truncate">{fila.nombre}</td>
                         <td className="text-tinta-suave">{fila.categoria ?? "—"}</td>
                         <td className="cifra text-right">
-                          {numero(fila.stock)} {fila.unidadMedida}
+                          {fila.porPeso ? cantidadEscrita(fila.stock, true) : `${numero(fila.stock)} ${fila.unidadMedida}`}
                         </td>
                         <td className="cifra text-right font-medium">{plata(fila.capital)}</td>
                         <td className="cifra text-right text-tinta-suave">

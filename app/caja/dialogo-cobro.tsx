@@ -46,12 +46,28 @@ export function DialogoCobro({
   }) => void;
 }) {
   const avisos = useAvisos();
-  const total = items.reduce(
+  const subtotal = items.reduce(
     (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
     0
   );
 
-  const [tramos, setTramos] = useState<Tramo[]>([{ metodo: "efectivo", monto: String(total) }]);
+  // El descuento se escribe en pesos o en porcentaje, lo que a cada uno le
+  // salga más rápido. Adentro siempre viaja en pesos: un porcentaje guardado
+  // obligaría a recalcularlo cada vez que se lee, y a decidir cómo redondear
+  // en cada lugar que lo mire.
+  const [descuentoTexto, setDescuentoTexto] = useState("");
+  const [enPorcentaje, setEnPorcentaje] = useState(false);
+
+  const descuento = (() => {
+    const escrito = leerNumero(descuentoTexto) ?? 0;
+    if (escrito <= 0) return 0;
+    const pesos = enPorcentaje ? Math.round((subtotal * escrito) / 100) : Math.round(escrito);
+    return Math.min(Math.max(pesos, 0), subtotal);
+  })();
+
+  const total = subtotal - descuento;
+
+  const [tramos, setTramos] = useState<Tramo[]>([{ metodo: "efectivo", monto: String(subtotal) }]);
   const [recibido, setRecibido] = useState("");
   const [nombre, setNombre] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(null);
@@ -141,6 +157,7 @@ export function DialogoCobro({
           nombre,
           notas,
           fiar,
+          descuento,
           recibido: Math.round(leerNumero(recibido) ?? 0),
           pagos,
           items: items.map((i) => ({
@@ -190,9 +207,58 @@ export function DialogoCobro({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between rounded-md border border-linea bg-lienzo px-4 py-3">
-          <span className="etiqueta-campo">Total</span>
-          <span className="cifra font-titulo text-cifra">{plata(total)}</span>
+        <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo px-4 py-3">
+          {descuento > 0 && (
+            <>
+              <div className="flex items-baseline justify-between text-base text-tinta-suave">
+                <span>Subtotal</span>
+                <span className="cifra">{plata(subtotal)}</span>
+              </div>
+              <div className="flex items-baseline justify-between text-base text-exito-texto">
+                <span>Descuento</span>
+                <span className="cifra">−{plata(descuento)}</span>
+              </div>
+            </>
+          )}
+          <div className="flex items-baseline justify-between">
+            <span className="etiqueta-campo">Total</span>
+            <span className="cifra font-titulo text-cifra">{plata(total)}</span>
+          </div>
+        </div>
+
+        {/* El descuento en pesos o en porcentaje, lo que salga más rápido.
+            Va acá arriba y no escondido: es una decisión que se toma con el
+            cliente enfrente, antes de elegir cómo paga. */}
+        <div className="flex flex-wrap items-end gap-2">
+          <span className="min-w-[160px] flex-1">
+            <Campo
+              etiqueta="Descuento"
+              inputMode="numeric"
+              value={descuentoTexto}
+              onChange={(e) => setDescuentoTexto(e.target.value)}
+              placeholder={enPorcentaje ? "10" : "500"}
+            />
+          </span>
+          <div className="flex overflow-hidden rounded border border-linea-fuerte">
+            {[
+              { valor: false, texto: "$" },
+              { valor: true, texto: "%" },
+            ].map((opcion) => (
+              <button
+                key={opcion.texto}
+                type="button"
+                onClick={() => setEnPorcentaje(opcion.valor)}
+                className={cn(
+                  "px-3 py-2 text-base transition-colors",
+                  enPorcentaje === opcion.valor
+                    ? "bg-acento text-white"
+                    : "text-tinta-suave hover:bg-black/[0.04]"
+                )}
+              >
+                {opcion.texto}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col gap-2">

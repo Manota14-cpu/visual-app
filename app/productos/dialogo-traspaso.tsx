@@ -245,7 +245,7 @@ export function DialogoTraspaso({
                 type="checkbox"
                 checked={crearFaltantes}
                 onChange={(e) => setCrearFaltantes(e.target.checked)}
-                className="h-4 w-4 accent-[#0071E3]"
+                className="h-4 w-4 accent-acento"
               />
               Crear los productos que no estén en el catálogo
             </label>

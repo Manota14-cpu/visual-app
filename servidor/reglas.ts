@@ -22,7 +22,12 @@ export function ajustarStock(
   productoId: string,
   cantidad: number,
   motivo: string,
-  tipo: TipoMovimiento = "ajuste"
+  tipo: TipoMovimiento = "ajuste",
+  // Quién lo hizo. Va al final y con valor por omisión para no tener que tocar
+  // las decenas de llamadas que no tienen a nadie identificado detrás —los
+  // datos de ejemplo, una importación—, y porque null es la respuesta honesta
+  // en un negocio que todavía no creó usuarios.
+  quien: { id: string; nombre: string } | null = null
 ): number {
   const producto = d.productos.find((p) => p.id === productoId);
   if (!producto) throw new Regla("Ese producto ya no existe.");
@@ -44,6 +49,8 @@ export function ajustarStock(
     cantidad: Math.abs(cantidad),
     stockResultante: resultante,
     motivo: recortar(motivo, 200),
+    usuarioId: quien?.id ?? null,
+    usuario: quien?.nombre ?? null,
     creadoEn: new Date().toISOString(),
   });
 
@@ -64,7 +71,8 @@ export function registrarPrecio(
   producto: Producto,
   precioAnterior: number,
   costoAnterior: number | null,
-  motivo: string | null
+  motivo: string | null,
+  quien: { id: string; nombre: string } | null = null
 ): void {
   if (producto.precioVenta === precioAnterior && producto.precioCosto === costoAnterior) return;
 
@@ -76,6 +84,8 @@ export function registrarPrecio(
     costoAnterior,
     costoNuevo: producto.precioCosto,
     motivo: recortar(motivo, 200),
+    usuarioId: quien?.id ?? null,
+    usuario: quien?.nombre ?? null,
     creadoEn: new Date().toISOString(),
   });
 }
@@ -482,4 +492,37 @@ export function monto(valor: unknown, campo: string): number {
 /** Cómo se escribe un importe dentro de un mensaje de error. */
 export function comoPlata(valor: number): string {
   return valor.toLocaleString("es-AR", { maximumFractionDigits: 0 });
+}
+
+// ───────────────────────────────  Proveedores  ───────────────────────────────
+
+/**
+ * Lo que el negocio le debe a un proveedor.
+ *
+ * Misma decisión que con el fiado de clientes, y por la misma razón: no hay
+ * saldo guardado. Se suma lo comprado y se le resta lo pagado, cada vez. Un
+ * número aparte es un número más que puede quedar desincronizado de los hechos
+ * que lo explican, y con plata ajena eso no se puede permitir.
+ *
+ * Lo pagado son los GASTOS que apuntan a ese proveedor. Pagarle es plata que
+ * sale del negocio, así que ya es un gasto; anotarlo aparte lo contaría dos
+ * veces en los informes.
+ */
+export function deudaProveedor(d: BaseDatos, proveedorId: string): number {
+  const comprado = d.compras
+    .filter((c) => c.proveedorId === proveedorId)
+    .reduce((s, c) => s + c.total, 0);
+
+  const pagado = d.gastos
+    .filter((g) => g.proveedorId === proveedorId)
+    .reduce((s, g) => s + g.monto, 0);
+
+  return comprado - pagado;
+}
+
+/** Lo que el negocio le debe a todo el mundo. */
+export function deudaProveedores(d: BaseDatos): number {
+  const comprado = d.compras.reduce((s, c) => s + c.total, 0);
+  const pagado = d.gastos.reduce((s, g) => s + (g.proveedorId ? g.monto : 0), 0);
+  return comprado - pagado;
 }
