@@ -59,7 +59,10 @@ function Catalogo() {
   const [elegidos, setElegidos] = useState<string[]>([]);
 
   const [editando, setEditando] = useState<Producto | null>(null);
-  const [creando, setCreando] = useState(false);
+  // `?nuevo=1&codigo=…` abre el alta con el código puesto: es a donde manda la
+  // caja cuando el lector lee un código que no es de ningún producto.
+  const [creando, setCreando] = useState(parametros.get("nuevo") === "1");
+  const codigoNuevo = parametros.get("codigo") ?? undefined;
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [viendoHistorial, setViendoHistorial] = useState<Producto | null>(null);
   const [abriendoCategorias, setAbriendoCategorias] = useState(false);
@@ -418,11 +421,12 @@ function Catalogo() {
       {/* Los diálogos se montan al abrirse y se desmontan al cerrarse: así el
           formulario nace con los datos del producto elegido y se descarta
           entero al salir, sin estado viejo que reaparezca en el siguiente. */}
-      {(creando || editando !== null) && (
+      {(creando || editando !== null) && categorias && (
         <DialogoProducto
           key={editando?.id ?? "nuevo"}
           abierto
           producto={editando}
+          codigoInicial={editando ? undefined : codigoNuevo}
           categorias={categorias ?? []}
           onCerrar={() => {
             setCreando(false);

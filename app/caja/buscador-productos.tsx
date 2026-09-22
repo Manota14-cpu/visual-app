@@ -48,12 +48,53 @@ export function decidirEnter<T>(
   return { accion: "nada" };
 }
 
+/**
+ * El producto que tiene exactamente ese código de barras o SKU, o `null`.
+ *
+ * Lo usan el buscador (Enter) y el lector de la caja, que escucha aunque el
+ * cursor no esté en el buscador.
+ */
+export async function buscarPorCodigo(codigo: string): Promise<ProductoBuscado | null> {
+  try {
+    const producto = await api.get<{
+      id: string;
+      nombre: string;
+      sku: string | null;
+      codigoBarras: string | null;
+      precioVenta: number;
+      stock: number;
+      unidadMedida: string;
+      porPeso: boolean;
+    }>(`/productos/codigo/${encodeURIComponent(codigo)}`);
+
+    return {
+      id: producto.id,
+      nombre: producto.nombre,
+      sku: producto.sku,
+      codigoBarras: producto.codigoBarras,
+      precio: producto.precioVenta,
+      stock: producto.stock,
+      unidadMedida: producto.unidadMedida,
+      porPeso: producto.porPeso,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function BuscadorProductos({
   onElegir,
+  onNoEncontrado,
   autoFocus,
   placeholder = "Buscar producto o escanear código",
 }: {
-  onElegir: (producto: ProductoBuscado) => void;
+  /** `porCodigo`: vino de un código leído o escrito entero, no de la lista. */
+  onElegir: (producto: ProductoBuscado, porCodigo: boolean) => void;
+  /**
+   * Un código leído que no es de ningún producto. Antes no pasaba nada: el
+   * lector pitaba, la pantalla quedaba igual y parecía que no andaba.
+   */
+  onNoEncontrado?: (codigo: string) => void;
   autoFocus?: boolean;
   placeholder?: string;
 }) {
@@ -74,43 +115,26 @@ export function BuscadorProductos({
   // renglón que ya no está.
   const activo = Math.min(resaltado, Math.max(resultados.length - 1, 0));
 
-  function elegir(producto: ProductoBuscado) {
-    onElegir(producto);
+  function elegir(producto: ProductoBuscado, porCodigo = false) {
+    onElegir(producto, porCodigo);
     setTexto("");
     entrada.current?.focus();
   }
 
   async function porCodigo(codigo: string) {
-    try {
-      const producto = await api.get<{
-        id: string;
-        nombre: string;
-        sku: string | null;
-        codigoBarras: string | null;
-        precioVenta: number;
-        stock: number;
-        unidadMedida: string;
-        porPeso: boolean;
-      }>(`/productos/codigo/${encodeURIComponent(codigo)}`);
-
-      elegir({
-        id: producto.id,
-        nombre: producto.nombre,
-        sku: producto.sku,
-        codigoBarras: producto.codigoBarras,
-        precio: producto.precioVenta,
-        stock: producto.stock,
-        unidadMedida: producto.unidadMedida,
-        porPeso: producto.porPeso,
-      });
-      return true;
-    } catch {
-      return false;
+    const producto = await buscarPorCodigo(codigo);
+    if (producto) {
+      elegir(producto, true);
+    } else {
+      setTexto("");
+      onNoEncontrado?.(codigo);
     }
   }
 
   return (
-    <div className="relative">
+    // `data-lector`: el lector de la caja deja que este campo maneje sus
+    // propias lecturas, que ya se resuelven con el Enter de acá abajo.
+    <div className="relative" data-lector="propio">
       <Buscador
         ref={entrada}
         autoFocus={autoFocus}

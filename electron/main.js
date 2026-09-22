@@ -229,6 +229,9 @@ function crearVentana(direccion) {
       sandbox: true,
       webSecurity: true,
       spellcheck: false,
+      // El pitido del lector de códigos suena sin esperar un clic: la primera
+      // lectura del día no puede quedar muda.
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
 

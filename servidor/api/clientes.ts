@@ -65,7 +65,15 @@ export function rutasClientes(r: Ruteador, a: Almacen): void {
         )
         .sort((x, y) => x.nombre.localeCompare(y.nombre, "es"))
         .slice(0, 8)
-        .map((c) => ({ id: c.id, nombre: c.nombre, telefono: c.telefono, ciudad: c.ciudad }));
+        // Lo que debe va en la búsqueda: al elegir a quién se le cobra o se le
+        // fía, es lo primero que hay que saber.
+        .map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          telefono: c.telefono,
+          ciudad: c.ciudad,
+          debe: deudaDe(d, c.id),
+        }));
     })
   );
 

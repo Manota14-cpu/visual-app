@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
-import { api, consulta, ErrorApi } from "@/lib/api";
-import { useDatos, useEspera } from "@/lib/datos";
+import { api, ErrorApi } from "@/lib/api";
+import { SelectorCliente, type ClienteElegido } from "@/components/selector-cliente";
 import { importeRenglon, leerNumero, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, MEDIOS_PAGO, type ItemCobro, type MedioPago } from "@/lib/tipos";
@@ -58,19 +58,21 @@ export function DialogoCobro({
   const [descuentoTexto, setDescuentoTexto] = useState("");
   const [enPorcentaje, setEnPorcentaje] = useState(false);
 
-  const descuento = (() => {
-    const escrito = leerNumero(descuentoTexto) ?? 0;
+  const descuentoDe = (texto: string, porcentaje: boolean) => {
+    const escrito = leerNumero(texto) ?? 0;
     if (escrito <= 0) return 0;
-    const pesos = enPorcentaje ? Math.round((subtotal * escrito) / 100) : Math.round(escrito);
+    const pesos = porcentaje ? Math.round((subtotal * escrito) / 100) : Math.round(escrito);
     return Math.min(Math.max(pesos, 0), subtotal);
-  })();
+  };
 
+  const descuento = descuentoDe(descuentoTexto, enPorcentaje);
   const total = subtotal - descuento;
 
   const [tramos, setTramos] = useState<Tramo[]>([{ metodo: "efectivo", monto: String(subtotal) }]);
   const [recibido, setRecibido] = useState("");
   const [nombre, setNombre] = useState("");
-  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
+  const clienteId = cliente?.id ?? null;
   const [notas, setNotas] = useState("");
   const [fiar, setFiar] = useState(false);
   const [cobrando, setCobrando] = useState(false);
@@ -83,7 +85,47 @@ export function DialogoCobro({
 
   // Un tramo en cero no es una forma de pago. El backend lo rechaza, así que
   // conviene no dejar llegar hasta ahí: se avisa acá, al lado del renglón.
-  const hayTramoVacio = pagos.some((p) => p.monto <= 0);
+  //
+  // Fiando es distinto: un cero es "no deja nada ahora", que es justamente lo
+  // más común al fiar. Esos tramos no se mandan. Antes el cero bloqueaba el
+  // botón igual que en una venta común, y como el monto arranca con el total
+  // —y con el total "no queda nada fiado"— no había forma de fiar una venta
+  // sin que el cliente entregara algo.
+  const hayTramoVacio = fiar ? pagos.some((p) => p.monto < 0) : pagos.some((p) => p.monto <= 0);
+  const pagosQueViajan = fiar ? pagos.filter((p) => p.monto > 0) : pagos;
+
+  /**
+   * El último tramo absorbe lo que cambie el total.
+   *
+   * Poner un descuento baja el total, y el monto a cobrar tenía que corregirse
+   * a mano: quedaba "sobran $500" y el botón bloqueado, justo con el cliente
+   * esperando. Fiando no se toca: ahí los montos son lo que entrega, no el
+   * total.
+   */
+  function ajustarAlTotal(nuevoTotal: number) {
+    if (fiar) return;
+    setTramos((previos) => {
+      const otros = previos
+        .slice(0, -1)
+        .reduce((suma, t) => suma + Math.round(leerNumero(t.monto) ?? 0), 0);
+      const ultimo = previos[previos.length - 1]!;
+      return [...previos.slice(0, -1), { ...ultimo, monto: String(Math.max(nuevoTotal - otros, 0)) }];
+    });
+  }
+
+  /**
+   * Tildar "Queda fiado" deja lo entregado en cero: lo normal al fiar es que
+   * no pague nada ahora, y si deja algo se escribe arriba. Destildarlo vuelve
+   * a cobrar el total.
+   */
+  function cambiarFiar(fiando: boolean) {
+    setFiar(fiando);
+    setTramos((previos) =>
+      fiando
+        ? [{ ...previos[0]!, monto: "0" }]
+        : [{ ...previos[0]!, monto: String(total) }]
+    );
+  }
 
   // Fiar exige un cliente: una deuda sin nombre no se cobra nunca. Y tiene que
   // quedar algo debiendo, si no es una venta común.
@@ -159,7 +201,7 @@ export function DialogoCobro({
           fiar,
           descuento,
           recibido: Math.round(leerNumero(recibido) ?? 0),
-          pagos,
+          pagos: pagosQueViajan,
           items: items.map((i) => ({
             productoId: i.productoId,
             nombre: i.nombre,
@@ -235,7 +277,10 @@ export function DialogoCobro({
               etiqueta="Descuento"
               inputMode="numeric"
               value={descuentoTexto}
-              onChange={(e) => setDescuentoTexto(e.target.value)}
+              onChange={(e) => {
+                setDescuentoTexto(e.target.value);
+                ajustarAlTotal(subtotal - descuentoDe(e.target.value, enPorcentaje));
+              }}
               placeholder={enPorcentaje ? "10" : "500"}
             />
           </span>
@@ -247,7 +292,10 @@ export function DialogoCobro({
               <button
                 key={opcion.texto}
                 type="button"
-                onClick={() => setEnPorcentaje(opcion.valor)}
+                onClick={() => {
+                  setEnPorcentaje(opcion.valor);
+                  ajustarAlTotal(subtotal - descuentoDe(descuentoTexto, opcion.valor));
+                }}
                 className={cn(
                   "px-3 py-2 text-base transition-colors",
                   enPorcentaje === opcion.valor
@@ -363,15 +411,7 @@ export function DialogoCobro({
           </div>
         )}
 
-        <SelectorCliente
-          nombre={nombre}
-          onNombre={setNombre}
-          onCliente={(cliente) => {
-            setClienteId(cliente?.id ?? null);
-            setNombre(cliente?.nombre ?? "");
-          }}
-          clienteElegido={clienteId !== null}
-        />
+        <SelectorCliente nombre={nombre} onNombre={setNombre} cliente={cliente} onCliente={setCliente} />
 
         {/* Fiar. Va debajo del cliente a propósito: el orden en pantalla es el
             orden de la decisión, porque sin cliente no hay a quién cobrarle. */}
@@ -380,7 +420,7 @@ export function DialogoCobro({
             <input
               type="checkbox"
               checked={fiar}
-              onChange={(e) => setFiar(e.target.checked)}
+              onChange={(e) => cambiarFiar(e.target.checked)}
               className="mt-0.5 h-4 w-4 cursor-pointer"
             />
             <span className="min-w-0">
@@ -394,8 +434,15 @@ export function DialogoCobro({
 
           {fiar && clienteId === null && (
             <Etiqueta tono="alerta">
-              Elegí el cliente de la agenda: una deuda sin nombre no se cobra nunca
+              Elegí o agregá el cliente arriba: una deuda sin nombre no se cobra nunca
             </Etiqueta>
+          )}
+          {fiar && cliente && falta > 0 && (
+            <span className="text-chico text-tinta-suave">
+              {cliente.debe > 0
+                ? `Ya debía ${plata(cliente.debe)}: con esta venta queda debiendo ${plata(cliente.debe + falta)}.`
+                : `Queda debiendo ${plata(falta)}.`}
+            </span>
           )}
           {fiar && clienteId !== null && falta <= 0 && (
             <Etiqueta tono="aviso">
@@ -412,92 +459,5 @@ export function DialogoCobro({
         />
       </div>
     </Dialogo>
-  );
-}
-
-/**
- * A quién se le vende.
- *
- * Se puede escribir un nombre suelto —la mayoría de las ventas de mostrador no
- * tienen ficha— o engancharla a un cliente de la agenda, que es lo que hace
- * que después aparezca en su historial de compras.
- */
-function SelectorCliente({
-  nombre,
-  onNombre,
-  onCliente,
-  clienteElegido,
-}: {
-  nombre: string;
-  onNombre: (valor: string) => void;
-  onCliente: (cliente: { id: string; nombre: string } | null) => void;
-  clienteElegido: boolean;
-}) {
-  const [texto, setTexto] = useState("");
-  const termino = useEspera(texto, 220);
-
-  const { datos } = useDatos<{ id: string; nombre: string; telefono: string | null; ciudad: string | null }[]>(
-    !clienteElegido && termino.trim().length >= 2 ? `/clientes/buscar${consulta({ q: termino })}` : null,
-    { silencioso: true }
-  );
-
-  const sugerencias = useMemo(() => datos ?? [], [datos]);
-
-  if (clienteElegido) {
-    return (
-      <div className="flex items-center justify-between gap-2 rounded-md border border-linea bg-lienzo px-3 py-2">
-        <span className="min-w-0">
-          <span className="etiqueta-campo">Cliente</span>
-          <span className="block truncate">{nombre}</span>
-        </span>
-        <Boton
-          chico
-          tono="fantasma"
-          onClick={() => {
-            onCliente(null);
-            setTexto("");
-          }}
-        >
-          Quitar
-        </Boton>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <Campo
-        etiqueta="Cliente"
-        placeholder="Mostrador"
-        ayuda="Escribí un nombre, o buscá uno de la agenda para que le quede en su historial."
-        value={nombre}
-        onChange={(e) => {
-          onNombre(e.target.value);
-          setTexto(e.target.value);
-        }}
-      />
-
-      {sugerencias.length > 0 && (
-        <ul className="vidrio-menu absolute left-0 right-0 top-[62px] z-30 max-h-52 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-black/[0.07]">
-          {sugerencias.map((cliente) => (
-            <li key={cliente.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onCliente(cliente);
-                  setTexto("");
-                }}
-                className="flex w-full flex-col px-3 py-1.5 text-left transition-colors hover:bg-acento/[0.08]"
-              >
-                <span>{cliente.nombre}</span>
-                <span className="text-chico text-tinta-suave">
-                  {[cliente.telefono, cliente.ciudad].filter(Boolean).join(" · ")}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

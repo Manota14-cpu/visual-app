@@ -41,7 +41,8 @@ export type NombreIcono =
   | "salir"
   | "camion"
   | "recuento"
-  | "puntos";
+  | "puntos"
+  | "codigo";
 
 const trazos: Record<NombreIcono, ReactNode> = {
   panel: (
@@ -196,6 +197,14 @@ const trazos: Record<NombreIcono, ReactNode> = {
       <path d="M8.5 4.5h-2A1.5 1.5 0 0 0 5 6v13.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-2" />
       <rect x="8.5" y="3" width="7" height="3" rx="1" />
       <path d="m9 13.5 2.2 2.2 4.3-4.5" />
+    </>
+  ),
+  // El lector de códigos: barras de distinto ancho entre dos esquinas.
+  codigo: (
+    <>
+      <path d="M3.5 7.5v-2a1 1 0 0 1 1-1h2M17.5 4.5h2a1 1 0 0 1 1 1v2M20.5 16.5v2a1 1 0 0 1-1 1h-2M6.5 19.5h-2a1 1 0 0 1-1-1v-2" />
+      <path d="M7.5 8v8M10 8v8M12.5 8v8M15.5 8v8" />
+      <path d="M16.8 8v8" strokeWidth={0.9} />
     </>
   ),
   // "Más", en la barra del teléfono: los tres puntos de siempre.

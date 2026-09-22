@@ -17,6 +17,8 @@ import {
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
+import { useSesion } from "@/lib/sesion";
+import { pitido, useLectorDeCodigos } from "@/lib/lector";
 import { api, ErrorApi } from "@/lib/api";
 import {
   cantidadEscrita,
@@ -30,7 +32,7 @@ import {
 } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type Caja, type CajaResumen, type ItemCobro } from "@/lib/tipos";
-import { BuscadorProductos } from "./buscador-productos";
+import { BuscadorProductos, buscarPorCodigo } from "./buscador-productos";
 import { DialogoCobro } from "./dialogo-cobro";
 import { DialogoDevolucion } from "./dialogo-devolucion";
 import { DialogoCierre } from "./dialogo-cierre";
@@ -40,7 +42,12 @@ export default function PaginaCaja() {
   const { datos: caja, cargando, error, recargar } = useDatos<Caja | null>("/caja");
   const { datos: historial, recargar: recargarHistorial } = useDatos<CajaResumen[]>("/caja/historial");
 
+  const { esDueno } = useSesion();
   const [items, setItems] = useState<ItemCobro[]>([]);
+  // Lo último que leyó el lector, para el recuadro de abajo del buscador.
+  const [lectura, setLectura] = useState<
+    { codigo: string; producto: string | null } | null
+  >(null);
   const [cobrando, setCobrando] = useState(false);
   const [devolviendo, setDevolviendo] = useState(false);
   // La caja que se está cerrando se guarda aparte, no se toma "en vivo": al
@@ -106,6 +113,32 @@ export default function PaginaCaja() {
       ];
     });
   }
+
+  /**
+   * Lo que pasa cuando el lector lee un código.
+   *
+   * Pita siempre —agudo si entró, dos graves si no existe— porque quien pasa
+   * productos no mira la pantalla en cada uno. Y si no existe lo dice en un
+   * aviso: antes la lectura se perdía sin ninguna señal y parecía que el lector
+   * no andaba.
+   */
+  function leido(codigo: string, producto: Parameters<typeof agregar>[0] | null) {
+    if (producto) {
+      agregar(producto);
+      pitido("ok");
+    } else {
+      pitido("error");
+      avisos.error(`No hay ningún producto con el código ${codigo}.`);
+    }
+    setLectura({ codigo, producto: producto?.nombre ?? null });
+  }
+
+  // El lector se escucha en toda la pantalla, no solo en el buscador: si el
+  // cursor quedó en otro lado, la lectura igual entra al carrito.
+  useLectorDeCodigos(
+    (codigo) => void buscarPorCodigo(codigo).then((producto) => leido(codigo, producto)),
+    Boolean(caja)
+  );
 
   return (
     <Marco
@@ -182,7 +215,15 @@ export default function PaginaCaja() {
 
             <Hoja titulo="Cobrar">
               <div className="flex flex-col gap-3">
-                <BuscadorProductos autoFocus onElegir={agregar} />
+                <BuscadorProductos
+                  autoFocus
+                  onElegir={(producto, porCodigo) =>
+                    porCodigo ? leido(producto.codigoBarras ?? producto.sku ?? "", producto) : agregar(producto)
+                  }
+                  onNoEncontrado={(codigo) => leido(codigo, null)}
+                />
+
+                <Lector lectura={lectura} esDueno={esDueno} />
 
                 {items.length === 0 ? (
                   <Vacio
@@ -689,5 +730,65 @@ function DialogoMovimiento({
         />
       </div>
     </Dialogo>
+  );
+}
+
+/**
+ * El recuadro del lector de códigos, debajo del buscador.
+ *
+ * Dice que el lector está escuchando —y que no hace falta tocar el buscador
+ * para usarlo— y qué fue lo último que leyó. Si el código no existe, el dueño
+ * tiene a mano cargarlo en Productos con el código ya puesto.
+ */
+function Lector({
+  lectura,
+  esDueno,
+}: {
+  lectura: { codigo: string; producto: string | null } | null;
+  esDueno: boolean;
+}) {
+  const noExiste = lectura !== null && lectura.producto === null;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border px-3 py-2 text-chico",
+        noExiste ? "border-alerta-linea bg-alerta-fondo" : "border-dashed border-linea-fuerte"
+      )}
+      aria-live="polite"
+    >
+      <Icono
+        nombre="codigo"
+        tamano={18}
+        className={noExiste ? "text-alerta-texto" : "text-acento"}
+      />
+      <span className="min-w-0 flex-1">
+        {lectura === null ? (
+          <>
+            <span className="font-medium text-tinta">Lector de códigos listo.</span>{" "}
+            <span className="text-tinta-suave">
+              Pasá el producto por el lector en cualquier momento: no hace falta tocar el buscador.
+            </span>
+          </>
+        ) : lectura.producto ? (
+          <span className="text-tinta-media">
+            Leído: <span className="font-medium text-tinta">{lectura.producto}</span>
+            {lectura.codigo && <span className="cifra text-tinta-suave"> · {lectura.codigo}</span>}
+          </span>
+        ) : (
+          <span className="text-alerta-texto">
+            No hay ningún producto con el código <span className="cifra font-medium">{lectura.codigo}</span>.
+          </span>
+        )}
+      </span>
+      {noExiste && esDueno && (
+        <Link
+          href={`/productos?nuevo=1&codigo=${encodeURIComponent(lectura.codigo)}`}
+          className="font-medium text-acento-texto hover:underline"
+        >
+          Cargarlo en Productos
+        </Link>
+      )}
+    </div>
   );
 }

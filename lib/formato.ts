@@ -223,3 +223,16 @@ export function llevado(unidades: number, gramos: number, corto = false): string
   if (partes.length === 0) return corto ? "0 u." : "0 unidades";
   return partes.join(" · ");
 }
+
+/**
+ * Un texto para comparar: sin acentos, sin mayúsculas y sin espacios de más.
+ * "José  Pérez" y "jose perez" son la misma persona anotada de dos formas.
+ */
+export function normalizarTexto(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}

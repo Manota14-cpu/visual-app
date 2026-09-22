@@ -72,12 +72,15 @@ function desde(producto: Producto): Formulario {
 export function DialogoProducto({
   abierto,
   producto,
+  codigoInicial,
   categorias,
   onCerrar,
   onGuardado,
 }: {
   abierto: boolean;
   producto: Producto | null;
+  /** Para un producto nuevo: el código de barras que ya se leyó. */
+  codigoInicial?: string;
   categorias: Categoria[];
   onCerrar: () => void;
   onGuardado: () => void;
@@ -89,7 +92,9 @@ export function DialogoProducto({
   // que no hace falta ningún efecto que copie el producto al estado — y no hay
   // riesgo de que lo pise mientras alguien está escribiendo.
   const [datos, setDatos] = useState<Formulario>(() =>
-    producto ? desde(producto) : { ...vacio, categoriaId: categorias[0]?.id ?? "" }
+    producto
+      ? desde(producto)
+      : { ...vacio, categoriaId: categorias[0]?.id ?? "", codigoBarras: codigoInicial ?? "" }
   );
   const [guardando, setGuardando] = useState(false);
 

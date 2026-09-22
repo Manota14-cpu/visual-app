@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Area, Boton, Campo, Dialogo, Vacio } from "@/components/ui";
+import { Area, Boton, Dialogo, Vacio } from "@/components/ui";
+import { SelectorCliente, type ClienteElegido } from "@/components/selector-cliente";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
@@ -32,6 +33,10 @@ export function DialogoDevolucion({
   const [items, setItems] = useState<ItemCobro[]>([]);
   const [metodo, setMetodo] = useState<MedioPago>("efectivo");
   const [nombre, setNombre] = useState("");
+  // El cliente de la agenda, si se eligió. Antes solo había un campo de texto
+  // y la devolución viajaba siempre sin cliente: no aparecía en su ficha, y su
+  // historial de compras mostraba lo que se llevó pero no lo que devolvió.
+  const [cliente, setCliente] = useState<ClienteElegido | null>(null);
   const [notas, setNotas] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
@@ -46,7 +51,7 @@ export function DialogoDevolucion({
       const r = await api.post<{ numero: number; total: number }>("/caja/devolver", {
         cajaId,
         pedidoId: null,
-        clienteId: null,
+        clienteId: cliente?.id ?? null,
         nombre,
         notas,
         metodoPago: metodo,
@@ -94,6 +99,7 @@ export function DialogoDevolucion({
         <BuscadorProductos
           autoFocus
           placeholder="Qué producto vuelve"
+          onNoEncontrado={(codigo) => avisos.error(`No hay ningún producto con el código ${codigo}.`)}
           onElegir={(producto) =>
             setItems((previos) => {
               // Lo que vuelve de un producto por peso se cuenta en gramos, así
@@ -195,11 +201,12 @@ export function DialogoDevolucion({
           </div>
         </div>
 
-        <Campo
-          etiqueta="Cliente"
-          placeholder="Quién devuelve"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+        <SelectorCliente
+          nombre={nombre}
+          onNombre={setNombre}
+          cliente={cliente}
+          onCliente={setCliente}
+          ayuda="Quién devuelve. Si está en la agenda, la devolución queda en su ficha."
         />
 
         <Area
