@@ -1,0 +1,14 @@
+{
+  "name": "visual-app-video",
+  "private": true,
+  "type": "module",
+  "description": "El video de presentación de Visual App: una animación en HTML que se convierte en MP4.",
+  "scripts": {
+    "musica": "python3 musica.py",
+    "render": "node render.mjs",
+    "vista": "node render.mjs --servir"
+  },
+  "dependencies": {
+    "playwright-core": "^1.55.0"
+  }
+}

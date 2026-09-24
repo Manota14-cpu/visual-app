@@ -36,3 +36,9 @@ skills-lock.json
 
 # Lo que armaba el instalador anterior (build.ps1), hasta la versión 2.0.0
 publicar/
+
+# El video (video/): los cuadros sueltos del renderizador, las fotos de prueba
+# y la música sin comprimir, que se regenera con `npm run musica`
+video/.cuadros/
+video/.muestras/
+video/musica.wav
