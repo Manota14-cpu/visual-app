@@ -104,10 +104,9 @@ export default function PaginaInformes() {
             </Aviso>
           )}
 
-          {datos.sinCosto.unidades > 0 && (
+          {(datos.sinCosto.unidades > 0 || datos.sinCosto.gramos > 0) && (
             <Aviso tono="alerta">
-              Se vendieron {numero(datos.sinCosto.unidades)}{" "}
-              {datos.sinCosto.unidades === 1 ? "unidad" : "unidades"} por{" "}
+              Se vendieron {llevado(datos.sinCosto.unidades, datos.sinCosto.gramos)} por{" "}
               {plata(datos.sinCosto.ingreso)} de productos que no tienen costo cargado. Esa plata
               entra al informe como ganancia pura: el margen y el resultado de arriba están
               exagerados hasta que les cargues el costo.

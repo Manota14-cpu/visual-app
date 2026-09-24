@@ -17,7 +17,7 @@ import {
 } from "@/components/ui";
 import { useDatos, useEspera } from "@/lib/datos";
 import { consulta } from "@/lib/api";
-import { fechaHora, numero, plata } from "@/lib/formato";
+import { fechaHora, llevado, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type PaginaPedidos, type Pedido } from "@/lib/tipos";
 import { DialogoVenta } from "./dialogo-venta";
@@ -158,7 +158,7 @@ function Ventas() {
                       <td className="whitespace-nowrap text-tinta-suave">
                         {venta.metodoPago ? ETIQUETA_PAGO[venta.metodoPago] ?? venta.metodoPago : "—"}
                       </td>
-                      <td className="cifra text-right text-tinta-suave">{numero(venta.unidades)}</td>
+                      <td className="cifra text-right text-tinta-suave">{llevado(venta.unidades, venta.gramos, true)}</td>
                       <td
                         className={cn(
                           "cifra text-right font-medium",

@@ -20,16 +20,7 @@ import { useDatos } from "@/lib/datos";
 import { useSesion } from "@/lib/sesion";
 import { pitido, useLectorDeCodigos } from "@/lib/lector";
 import { api, ErrorApi } from "@/lib/api";
-import {
-  cantidadEscrita,
-  fechaHora,
-  hora,
-  importeRenglon,
-  leerNumero,
-  llevado,
-  numero,
-  plata,
-} from "@/lib/formato";
+import { cantidadEscrita, enteroEscrito, fechaHora, hora, importeRenglon, leerNumero, llevado, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type Caja, type CajaResumen, type ItemCobro } from "@/lib/tipos";
 import { BuscadorProductos, buscarPorCodigo } from "./buscador-productos";
@@ -73,6 +64,8 @@ export default function PaginaCaja() {
   // No se puede entregar lo que no hay: el backend lo rechaza igual, pero el
   // renglón en rojo y el botón apagado lo dicen antes de confirmar la venta.
   const sinStock = items.some((i) => i.productoId !== null && i.cantidad > i.stock);
+  // Una cantidad vacía mientras se escribe: no se cobra hasta completarla.
+  const sinCantidad = items.some((i) => i.cantidad <= 0);
 
   function actualizar() {
     void recargar();
@@ -292,12 +285,12 @@ export default function PaginaCaja() {
                               aria-label={
                                 item.porPeso ? `Gramos de ${item.nombre}` : `Cantidad de ${item.nombre}`
                               }
-                              value={item.cantidad}
+                              value={item.cantidad === 0 ? "" : item.cantidad}
                               onChange={(e) =>
                                 setItems((previos) =>
                                   previos.map((i, x) =>
                                     x === indice
-                                      ? { ...i, cantidad: Math.max(1, Number(e.target.value) || 1) }
+                                      ? { ...i, cantidad: enteroEscrito(e.target.value, i.cantidad) }
                                       : i
                                   )
                                 )
@@ -368,7 +361,7 @@ export default function PaginaCaja() {
                     <Boton
                       tono="principal"
                       icono="caja"
-                      disabled={items.length === 0 || sinStock}
+                      disabled={items.length === 0 || sinStock || sinCantidad}
                       onClick={() => setCobrando(true)}
                     >
                       Cobrar

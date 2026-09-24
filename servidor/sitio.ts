@@ -45,7 +45,7 @@ export class Sitio {
    * 404 del propio sitio, no en un error del servidor: quien lo ve es una
    * persona, no un programa.
    */
-  resolver(ruta: string): { contenido: Buffer; tipo: string } | null {
+  resolver(ruta: string): { contenido: Buffer; tipo: string; estado: number } | null {
     let camino = ruta.split("?")[0] ?? "/";
 
     // Nada de subir de carpeta: la dirección la escribe el navegador, pero
@@ -55,13 +55,13 @@ export class Sitio {
     if (camino === "/" || camino === "") camino = "/index.html";
     camino = camino.replace(/\/+$/, "") || "/index.html";
 
-    for (const candidata of [camino, `${camino}.html`, `${camino}/index.html`]) {
+    for (const candidata of [camino, `${camino}.html`, `${camino}/index.html`, ...segmentosRsc(camino)]) {
       const contenido = this.archivos.get(candidata.toLowerCase());
-      if (contenido) return { contenido, tipo: tipoDe(candidata) };
+      if (contenido) return { contenido, tipo: tipoDe(candidata), estado: 200 };
     }
 
     const noEncontrada = this.archivos.get("/404.html");
-    if (noEncontrada) return { contenido: noEncontrada, tipo: "text/html; charset=utf-8" };
+    if (noEncontrada) return { contenido: noEncontrada, tipo: "text/html; charset=utf-8", estado: 404 };
 
     return null;
   }
@@ -73,19 +73,45 @@ export class Sitio {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end(
         this.vacio
-          ? "La interfaz no está compilada. Ejecutá build.ps1, o levantá Next con npm run dev."
+          ? "La interfaz no está compilada. Corré npm run build, o abrí la aplicación con npm run dev."
           : "No encontrado."
       );
       return;
     }
 
-    res.writeHead(200, {
+    res.writeHead(archivo.estado, {
       "Content-Type": archivo.tipo,
       "Content-Length": archivo.contenido.length,
       "Cache-Control": cacheDe(ruta),
     });
     res.end(archivo.contenido);
   }
+}
+
+/**
+ * Dónde dejó Next los datos de una pantalla que el navegador pide con puntos.
+ *
+ * Al tocar un enlace, la interfaz no pide la página entera: pide sus datos,
+ * con un nombre como `/panel/__next.panel.__PAGE__.txt`. La compilación los
+ * escribe en carpetas, `/panel/__next.panel/__PAGE__.txt`. Sin esta traducción
+ * cada pedido daba "no encontrado" y la interfaz se rendía recargando la página
+ * entera en cada clic del menú.
+ *
+ * Se prueba cada punto como posible separador de carpeta, de izquierda a
+ * derecha, y gana la primera que existe.
+ */
+function segmentosRsc(camino: string): string[] {
+  const corte = camino.lastIndexOf("/");
+  const carpeta = camino.slice(0, corte);
+  const nombre = camino.slice(corte + 1);
+  if (!nombre.startsWith("__next.") || !nombre.endsWith(".txt")) return [];
+
+  const partes = nombre.slice(0, -".txt".length).split(".");
+  const candidatas: string[] = [];
+  for (let k = 1; k < partes.length - 1; k++) {
+    candidatas.push(`${carpeta}/${partes.slice(0, k + 1).join(".")}/${partes.slice(k + 1).join("/")}.txt`);
+  }
+  return candidatas;
 }
 
 const TIPOS: Record<string, string> = {

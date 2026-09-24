@@ -16,7 +16,7 @@ import {
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
 import { api, ErrorApi } from "@/lib/api";
-import { cantidadEscrita, dia, numero } from "@/lib/formato";
+import { cantidadEscrita, dia, leerNumero, numero } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { BuscadorProductos } from "../caja/buscador-productos";
 
@@ -202,7 +202,7 @@ function DialogoPartida({
       await api.post("/vencimientos", {
         productoId: producto?.id,
         fecha,
-        cantidad: Number(cantidad),
+        cantidad: (leerNumero(cantidad) ?? 0),
         notas,
       });
       avisos.exito("Anotado.");
@@ -224,7 +224,7 @@ function DialogoPartida({
           <Boton
             tono="principal"
             onClick={() => void guardar()}
-            disabled={guardando || !producto || !fecha || Number(cantidad) <= 0}
+            disabled={guardando || !producto || !fecha || (leerNumero(cantidad) ?? 0) <= 0}
           >
             {guardando ? "Guardando…" : "Anotar"}
           </Boton>
@@ -296,7 +296,7 @@ function DialogoTirar({
   async function tirar() {
     setGuardando(true);
     try {
-      await api.post(`/vencimientos/${partida.id}/tirar`, { cantidad: Number(cantidad) });
+      await api.post(`/vencimientos/${partida.id}/tirar`, { cantidad: (leerNumero(cantidad) ?? 0) });
       avisos.exito("Dado de baja. El stock quedó actualizado.");
       await onTirada();
     } catch (e) {
@@ -316,7 +316,7 @@ function DialogoTirar({
           <Boton
             tono="peligro"
             onClick={() => void tirar()}
-            disabled={guardando || Number(cantidad) <= 0}
+            disabled={guardando || (leerNumero(cantidad) ?? 0) <= 0}
           >
             {guardando ? "Dando de baja…" : "Dar de baja"}
           </Boton>

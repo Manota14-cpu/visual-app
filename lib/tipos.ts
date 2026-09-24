@@ -97,6 +97,8 @@ export interface Movimiento {
   tipo: string;
   cantidad: number;
   stockResultante: number;
+  /** Si el producto se vende por peso: cantidad y stock van en gramos. */
+  porPeso: boolean;
   motivo: string | null;
   creadoEn: Fecha;
 }
@@ -146,6 +148,10 @@ export interface Pedido {
   pagos: Pago[];
   items: ItemPedido[];
   unidades: number;
+  /** Gramos, si la venta tenía productos por peso. */
+  gramos: number;
+  /** Lo que se descontó al cobrar. */
+  descuento: number;
   creadoEn: Fecha;
 }
 
@@ -164,6 +170,8 @@ export const ETIQUETA_PAGO: Record<string, string> = {
   tarjeta: "Tarjeta",
   otro: "Otro",
   mixto: "Mixto",
+  fiado: "Fiado",
+  cuenta: "A cuenta",
 };
 
 export interface VentaCaja {
@@ -416,7 +424,7 @@ export interface Informe {
     ticketPromedio: number;
   };
   /** Lo que el informe no pudo medir: se vendió sin saber cuánto costaba. */
-  sinCosto: { unidades: number; ingreso: number };
+  sinCosto: { unidades: number; gramos: number; ingreso: number };
   /** Vendido no es cobrado: lo que salió fiado. */
   fiado: { enElPeriodo: number; total: number };
   porProducto: {

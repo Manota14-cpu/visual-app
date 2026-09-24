@@ -122,6 +122,8 @@ async function arrancar() {
   origen = new URL(direccion).origin;
 
   ventana = crearVentana(direccion);
+  prepararImpresion();
+  prepararPdf();
   prepararActualizaciones();
 }
 
@@ -324,18 +326,30 @@ function abrirAfuera(url) {
 }
 
 /**
- * Permisos del navegador: ninguno, salvo copiar al portapapeles.
+ * Permisos del navegador: copiar al portapapeles, y la cámara para leer
+ * códigos de barras. Nada más.
  *
- * La interfaz no usa cámara, micrófono, ubicación ni notificaciones del
- * navegador. Denegarlos todos de entrada es lo que garantiza que nunca
- * aparezca un cartel pidiéndolos.
+ * La cámara se presta solo para video —nunca el micrófono— y solo a la
+ * propia ventana del programa. Ubicación, notificaciones y el resto se niegan
+ * de entrada: así nunca aparece un cartel pidiéndolos.
  */
 function endurecerSesion() {
   const permitidos = new Set(["clipboard-sanitized-write"]);
-  session.defaultSession.setPermissionRequestHandler((_contenido, permiso, responder) => {
+
+  const soloVideo = (tipos) => Array.isArray(tipos) && tipos.length > 0 && tipos.every((t) => t === "video");
+
+  session.defaultSession.setPermissionRequestHandler((contenido, permiso, responder, detalles) => {
+    if (permiso === "media") {
+      responder(soloVideo(detalles?.mediaTypes) && esDeLaApp(detalles?.requestingUrl ?? contenido.getURL()));
+      return;
+    }
     responder(permitidos.has(permiso));
   });
-  session.defaultSession.setPermissionCheckHandler((_contenido, permiso) => permitidos.has(permiso));
+
+  session.defaultSession.setPermissionCheckHandler((_contenido, permiso, origenPedido, detalles) => {
+    if (permiso === "media") return detalles?.mediaType === "video" && esDeLaApp(origenPedido);
+    return permitidos.has(permiso);
+  });
 }
 
 /**
@@ -361,6 +375,65 @@ async function elegirCarpeta() {
     ? await dialog.showOpenDialog(ventana, opciones)
     : await dialog.showOpenDialog(opciones);
   return resultado.canceled ? null : (resultado.filePaths[0] ?? null);
+}
+
+// ─────────────────────────────  Impresión  ─────────────────────────────
+
+/**
+ * Imprimir el comprobante o la hoja de etiquetas.
+ *
+ * Se imprime desde el proceso principal y no con `window.print()` porque así
+ * se sabe si salió: `window.print()` no avisa nada, y cuando Windows no podía
+ * imprimir —el servicio "Cola de impresión" apagado, que pasa— el botón
+ * parecía roto. Así el motivo vuelve a la pantalla y se dice qué hacer.
+ *
+ * Abre el cuadro de impresión de Windows y respeta los estilos de impresión de
+ * la página (sin menú, sin botones).
+ */
+function prepararImpresion() {
+  ipcMain.handle("imprimir", (evento) => {
+    if (!esDeLaVentana(evento)) return { ok: false, motivo: "origen" };
+    return new Promise((listo) => {
+      evento.sender.print({ silent: false, printBackground: true }, (ok, motivo) => {
+        // Cancelar el cuadro no es un error: es cambiar de opinión.
+        listo({ ok: ok || motivo === "cancelled", motivo: ok ? null : motivo });
+      });
+    });
+  });
+}
+
+/**
+ * Guardar la pantalla como PDF.
+ *
+ * No pasa por la impresión de Windows, así que anda aunque no haya ninguna
+ * impresora o el servicio de impresión esté apagado. Sirve para mandarle el
+ * comprobante a un cliente, o para llevar las etiquetas a imprimir a otro lado.
+ */
+function prepararPdf() {
+  ipcMain.handle("guardarPdf", async (evento, nombre) => {
+    if (!esDeLaVentana(evento)) return { ok: false, archivo: null };
+
+    // El nombre lo propone la página: se limpia de todo lo que Windows no
+    // acepta en un nombre de archivo, y nunca trae una carpeta.
+    const limpio =
+      String(nombre ?? "")
+        .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80) || "Visual App";
+
+    const eleccion = await dialog.showSaveDialog(ventana, {
+      title: "Guardar como PDF",
+      defaultPath: path.join(app.getPath("documents"), `${limpio}.pdf`),
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (eleccion.canceled || !eleccion.filePath) return { ok: true, archivo: null };
+
+    const pdf = await evento.sender.printToPDF({ printBackground: true, pageSize: "A4" });
+    await fs.promises.writeFile(eleccion.filePath, pdf);
+    shell.showItemInFolder(eleccion.filePath);
+    return { ok: true, archivo: eleccion.filePath };
+  });
 }
 
 // ─────────────────────────────  Actualizaciones  ─────────────────────────────

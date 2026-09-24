@@ -208,9 +208,13 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
 
   r.get("/productos/codigo/:codigo", ({ params, usuario }) =>
     a.leer((d) => {
-      const codigo = params.codigo!.trim();
+      // Sin distinguir mayúsculas: un lector con el Bloq Mayús cambiado, o
+      // quien lo escribe a mano, manda "gen-lec-001" y es el mismo código.
+      const codigo = params.codigo!.trim().toLowerCase();
       const producto = d.productos.find(
-        (p) => p.activo && (p.codigoBarras === codigo || p.sku === codigo)
+        (p) =>
+          p.activo &&
+          (p.codigoBarras?.toLowerCase() === codigo || p.sku?.toLowerCase() === codigo)
       );
       return producto
         ? vista(d, producto, esDueno(usuario))
@@ -582,7 +586,23 @@ export function aplicarFormulario(d: BaseDatos, producto: Producto, cuerpo: Reco
   // gramos. Cambiar esto en un producto que ya tiene ventas no las toca —cada
   // renglón guardó su propia marca— pero sí cambia lo que significa su stock,
   // así que es una decisión para tomar al cargarlo, no después.
-  producto.porPeso = cuerpo.porPeso === true;
+  //
+  // Por eso no se deja cambiar con stock cargado: 10 unidades pasarían a ser
+  // 10 gramos sin que nadie lo decida. La importación puede hacerlo si en la
+  // misma fila trae el stock nuevo (`stockParaMarca`), que se escribe después.
+  const porPeso = cuerpo.porPeso === true;
+  if (
+    porPeso !== producto.porPeso &&
+    producto.stock !== 0 &&
+    (cuerpo.stockParaMarca === undefined || cuerpo.stockParaMarca === null)
+  ) {
+    throw new Regla(
+      porPeso
+        ? `Tiene ${producto.stock} unidades en stock. Para venderlo por peso, primero ajustá el stock a cero y después cargalo en gramos.`
+        : `Tiene ${producto.stock} gramos en stock. Para venderlo por unidad, primero ajustá el stock a cero y después cargalo en unidades.`
+    );
+  }
+  producto.porPeso = porPeso;
 
   const sku = recortar(cuerpo.sku as string, 40);
   if (sku && d.productos.some((p) => p.id !== producto.id && p.sku?.toLowerCase() === sku.toLowerCase())) {

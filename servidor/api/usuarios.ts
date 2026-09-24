@@ -115,12 +115,19 @@ export function rutasUsuarios(r: Ruteador, a: Almacen): void {
     "libre"
   );
 
-  /** Salir. La sesión se borra del archivo, no solo del navegador. */
-  r.post("/usuarios/salir", ({ usuario }) => {
-    if (usuario) {
+  /**
+   * Salir. La sesión se borra del archivo, no solo del navegador.
+   *
+   * Solo la de este dispositivo. Antes se borraban todas las del usuario: el
+   * dueño salía desde el celular y lo echaba también de la computadora del
+   * mostrador, en medio del turno.
+   */
+  r.post("/usuarios/salir", ({ usuario, token }) => {
+    if (usuario && token) {
+      const hash = hashDeToken(token);
       a.escribir((d) => {
         podarSesiones(d);
-        d.sesiones = d.sesiones.filter((s) => s.usuarioId !== usuario.id);
+        d.sesiones = d.sesiones.filter((s) => s.hash !== hash);
       });
     }
 

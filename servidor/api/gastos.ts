@@ -1,6 +1,7 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import type { Ruteador } from "../http.ts";
 import {
+  deudaProveedor,
   cajaAbierta,
   CATEGORIAS_GASTO,
   categoriaGastoValida,
@@ -123,6 +124,12 @@ export function rutasGastos(r: Ruteador, a: Almacen): void {
 
       exigirCajaEditable(d, gasto);
       aplicar(d, gasto, cuerpo, false);
+
+      // Si es un pago a un proveedor, no puede pasar a ser más de lo que se le
+      // debía: la cuenta quedaría mostrando que el proveedor le debe al negocio.
+      if (gasto.proveedorId && deudaProveedor(d, gasto.proveedorId) < 0) {
+        throw new Regla("Con ese monto se le pagaría al proveedor más de lo que se le debe.");
+      }
       return vista(d, gasto);
     }), "dueno");
 

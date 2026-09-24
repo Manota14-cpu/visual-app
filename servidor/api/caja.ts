@@ -309,6 +309,21 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       const origen = d.pedidos.find((p) => p.id === cuerpo.pedidoId);
       const cliente = buscarCliente(d, cuerpo.clienteId);
 
+      // "A cuenta": lo devuelto baja lo que el cliente debe y no sale plata del
+      // cajón. Sin esto, devolver algo que se había llevado fiado le daba la
+      // plata en efectivo por mercadería que nunca pagó.
+      const aCuenta = cuerpo.aCuenta === true;
+      if (aCuenta) {
+        if (!cliente) throw new Regla("Para descontarlo de la deuda, elegí el cliente.");
+        const debe = deudaDe(d, cliente.id);
+        if (debe <= 0) throw new Regla(`${cliente.nombre} no tiene deuda: devolvé la plata por otro medio.`);
+        if (total > debe) {
+          throw new Regla(
+            `${cliente.nombre} debe ${comoPlata(debe)}: a cuenta se puede devolver hasta eso. Por el resto, hacé otra devolución en efectivo.`
+          );
+        }
+      }
+
       let notas = recortar(cuerpo.notas as string, 400);
       if (origen) {
         notas = notas ? `${notas} (de la venta #${origen.numero})` : `De la venta #${origen.numero}`;
@@ -327,12 +342,14 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         clienteId: cliente?.id ?? null,
         notas,
         total: -total,
-        metodoPago: metodo,
+        metodoPago: aCuenta ? "cuenta" : metodo,
         recibido: null,
         cajaId: caja.id,
         descuento: 0,
         ...selloDe(usuario),
-        pagos: [{ metodo, monto: -total }],
+        // A cuenta no sale plata: no hay pago. El crédito va como un cobro a
+        // la cuenta del cliente, más abajo.
+        pagos: aCuenta ? [] : [{ metodo, monto: -total }],
         items: [],
         creadoEn: new Date().toISOString(),
       };
@@ -362,7 +379,29 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
       }
 
       d.pedidos.push(pedido);
-      return { id: pedido.id, numero: pedido.numero, total };
+
+      if (aCuenta && cliente) {
+        // Se anota como un pago a su cuenta —con medio "devolucion", que no es
+        // plata del cajón— para que la deuda baje y quede escrito por qué.
+        d.cobrosFiado.push({
+          id: nuevoId(),
+          clienteId: cliente.id,
+          nombre: cliente.nombre,
+          monto: total,
+          metodo: "devolucion",
+          cajaId: caja.id,
+          nota: `Devolución #${pedido.numero}`,
+          creadoEn: new Date().toISOString(),
+        });
+      }
+
+      return {
+        id: pedido.id,
+        numero: pedido.numero,
+        total,
+        aCuenta,
+        deudaCliente: cliente ? deudaDe(d, cliente.id) : 0,
+      };
     })
   );
 

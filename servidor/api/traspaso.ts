@@ -53,6 +53,7 @@ export function rutasTraspaso(r: Ruteador, a: Almacen): void {
           p.stock,
           p.stockMinimo,
           p.descripcion,
+          p.porPeso ? "si" : "no",
         ]),
       ];
 
@@ -189,6 +190,9 @@ const COLUMNAS = [
   "stock",
   "stock_minimo",
   "descripcion",
+  // Si se vende por peso: el precio es por kilo y el stock va en gramos. Sin
+  // esta columna, importar el catálogo convertía todo el pan en "unidades".
+  "por_peso",
 ] as const;
 
 /**
@@ -237,6 +241,11 @@ const ALIAS: Record<string, string> = {
   descripcion: "descripcion",
   observaciones: "descripcion",
   notas: "descripcion",
+  porpeso: "porPeso",
+  peso: "porPeso",
+  vendeporpeso: "porPeso",
+  alpeso: "porPeso",
+  granel: "porPeso",
 };
 
 /**
@@ -254,6 +263,8 @@ const ALIAS: Record<string, string> = {
  */
 const PARECIDOS: [string, string][] = [
   // Primero lo que contiene una palabra que también aparece en otro campo.
+  ["porpeso", "porPeso"],
+  ["granel", "porPeso"],
   ["minimo", "stockMinimo"],
   ["minima", "stockMinimo"],
   ["reponer", "stockMinimo"],
@@ -345,6 +356,8 @@ interface Fila {
   stockMinimo: number | null;
   stockActual: number | null;
   precioActual: number | null;
+  /** Si se vende por peso. Null si el archivo no lo dice: se deja como estaba. */
+  porPeso: boolean | null;
 }
 
 /**
@@ -427,6 +440,7 @@ function planificar(d: BaseDatos, cuerpo: Record<string, unknown>) {
       stockMinimo: entero(columna(cruda, "stockMinimo")),
       stockActual: null,
       precioActual: null,
+      porPeso: siONo(columna(cruda, "porPeso")),
     };
 
     const producto = buscar(d, sku, codigoBarras, nombre);
@@ -543,6 +557,21 @@ function revisar(d: BaseDatos, fila: Fila, producto: Producto | undefined): stri
 
   if (!producto && fila.precio === null) return "Producto nuevo sin precio de venta";
 
+  // Pasar a por peso (o volver) cambia lo que significa su stock: 10 unidades
+  // pasarían a ser 10 gramos. Solo con el stock en cero, o poniéndolo en la
+  // misma fila.
+  if (
+    producto &&
+    fila.porPeso !== null &&
+    fila.porPeso !== producto.porPeso &&
+    producto.stock !== 0 &&
+    fila.stockNuevo === null
+  ) {
+    return fila.porPeso
+      ? "Para pasarlo a por peso, poné el stock en gramos en la misma fila"
+      : "Para dejar de venderlo por peso, poné el stock en unidades en la misma fila";
+  }
+
   // Un código que ya usa OTRO producto no se puede escribir acá: son únicos, y
   // el catálogo dejaría de poder buscarse por ellos.
   const otroCon = (campo: (p: Producto) => string | null, valor: string) =>
@@ -586,6 +615,9 @@ function comparar(fila: Fila, producto: Producto): string[] {
   if (fila.stockMinimo !== null && fila.stockMinimo !== producto.stockMinimo) {
     cambios.push(`mínimo ${producto.stockMinimo} → ${fila.stockMinimo}`);
   }
+  if (fila.porPeso !== null && fila.porPeso !== producto.porPeso) {
+    cambios.push(fila.porPeso ? "pasa a venderse por peso" : "deja de venderse por peso");
+  }
 
   return cambios;
 }
@@ -617,12 +649,34 @@ function formularioDe(
     precioMayorista: producto.precioMayorista ?? 0,
     cantidadMayoristaMin: producto.cantidadMayoristaMin ?? 0,
     stockMinimo: fila.stockMinimo ?? producto.stockMinimo,
+    // Lo que diga el archivo, o lo que ya tenía. Antes no se mandaba y el
+    // formulario lo tomaba como "no": importar la planilla para actualizar
+    // precios convertía todos los productos por peso en productos por unidad.
+    porPeso: fila.porPeso ?? producto.porPeso,
+    // El stock de la fila ya se sabe: el formulario lo usa para decidir si se
+    // puede cambiar la marca sin reinterpretar lo que hay.
+    stockParaMarca: fila.stockNuevo,
   };
 }
 
 /** El encabezado, sin acentos, sin espacios y sin signos: "Código de barras" → "codigobarras". */
 function claveDe(texto: string): string {
   return soloAlfanumerico(texto).toLowerCase();
+}
+
+/**
+ * Una celda de sí o no. Vacía es "no lo digo".
+ *
+ * Acepta lo que escribe cualquiera: "si", "sí", "x", "1", "kg", "peso"; y del
+ * otro lado "no", "0", "unidad". Lo que no se entiende cuenta como "no lo digo":
+ * mejor no tocar la marca que adivinarla mal.
+ */
+function siONo(texto: string | null): boolean | null {
+  const limpio = (texto ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!limpio) return null;
+  if (["si", "s", "x", "1", "true", "verdadero", "kg", "kilo", "peso", "granel"].includes(limpio)) return true;
+  if (["no", "n", "0", "false", "falso", "unidad", "u", "un"].includes(limpio)) return false;
+  return null;
 }
 
 /** Una celda numérica. Vacía es "no lo digo", no "cero". */

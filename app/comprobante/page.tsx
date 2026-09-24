@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Boton, Cargando, Vacio } from "@/components/ui";
 import { useDatos } from "@/lib/datos";
+import { guardarPdf, imprimir } from "@/lib/escritorio";
 import { cantidadEscrita, fechaHora, importeRenglon, numero, plata } from "@/lib/formato";
 import { ETIQUETA_PAGO, type Pedido, type Sistema } from "@/lib/tipos";
 
@@ -29,6 +30,7 @@ function Comprobante() {
 
   const { datos: venta, cargando } = useDatos<Pedido>(id ? `/pedidos/${id}` : null);
   const { datos: sistema } = useDatos<Sistema>("/sistema");
+  const [errorImpresion, setErrorImpresion] = useState<string | null>(null);
 
   if (!id) {
     return (
@@ -44,10 +46,33 @@ function Comprobante() {
         <Link href="/ventas" className="text-base text-tinta-suave hover:text-tinta">
           ← Volver a ventas
         </Link>
-        <Boton tono="principal" icono="imprimir" onClick={() => window.print()}>
-          Imprimir
-        </Boton>
+        <span className="flex gap-2">
+          <Boton
+            icono="archivo"
+            disabled={!venta}
+            onClick={() =>
+              void guardarPdf(`Comprobante ${venta?.numero ?? ""} ${venta?.nombre ?? ""}`).catch(
+                (e: Error) => setErrorImpresion(e.message)
+              )
+            }
+          >
+            Guardar PDF
+          </Boton>
+          <Boton
+            tono="principal"
+            icono="imprimir"
+            onClick={() => void imprimir().catch((e: Error) => setErrorImpresion(e.message))}
+          >
+            Imprimir
+          </Boton>
+        </span>
       </div>
+
+      {errorImpresion && (
+        <p className="sin-imprimir mb-4 rounded-md border border-alerta-linea bg-alerta-fondo px-3 py-2 text-base text-alerta-texto">
+          {errorImpresion}
+        </p>
+      )}
 
       {cargando && <Cargando filas={6} />}
 

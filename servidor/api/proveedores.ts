@@ -260,7 +260,18 @@ export function rutasProveedores(r: Ruteador, a: Almacen): void {
         if (i < 0) throw new Regla("Esa compra ya no existe.");
 
         const [compra] = d.compras.splice(i, 1);
-        return { ok: true, deuda: deudaProveedor(d, compra!.proveedorId) };
+        const deuda = deudaProveedor(d, compra!.proveedorId);
+
+        // Si con esta compra se había pagado algo —la entrega al recibirla, o
+        // un pago después—, sin la compra ese pago queda sobrando y la cuenta
+        // mostraría que el proveedor le debe plata al negocio. Se frena: el
+        // pago está en Gastos y hay que decidir qué hacer con él.
+        if (deuda < 0) {
+          throw new Regla(
+            `Si se borra esta compra, lo pagado quedaría ${comoPlata(-deuda)} por encima de lo comprado. Borrá antes ese pago en Gastos.`
+          );
+        }
+        return { ok: true, deuda };
       }),
     "dueno"
   );

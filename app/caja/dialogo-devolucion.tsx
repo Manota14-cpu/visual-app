@@ -6,7 +6,7 @@ import { SelectorCliente, type ClienteElegido } from "@/components/selector-clie
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { importeRenglon, numero, plata } from "@/lib/formato";
+import { enteroEscrito, importeRenglon, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, MEDIOS_PAGO, type ItemCobro, type MedioPago } from "@/lib/tipos";
 import { BuscadorProductos } from "./buscador-productos";
@@ -37,6 +37,11 @@ export function DialogoDevolucion({
   // y la devolución viajaba siempre sin cliente: no aparecía en su ficha, y su
   // historial de compras mostraba lo que se llevó pero no lo que devolvió.
   const [cliente, setCliente] = useState<ClienteElegido | null>(null);
+  // Descontarlo de lo que el cliente debe, en vez de devolverle la plata. Solo
+  // se ofrece si debe algo: devolverle efectivo por algo que se llevó fiado
+  // era pagarle mercadería que nunca pagó.
+  const [aCuenta, setACuenta] = useState(false);
+  const puedeACuenta = cliente !== null && cliente.debe > 0;
   const [notas, setNotas] = useState("");
   const [trabajando, setTrabajando] = useState(false);
 
@@ -44,14 +49,21 @@ export function DialogoDevolucion({
     (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
     0
   );
+  const excedeDeuda = aCuenta && cliente !== null && total > cliente.debe;
 
   async function devolver() {
     setTrabajando(true);
     try {
-      const r = await api.post<{ numero: number; total: number }>("/caja/devolver", {
+      const r = await api.post<{
+        numero: number;
+        total: number;
+        aCuenta: boolean;
+        deudaCliente: number;
+      }>("/caja/devolver", {
         cajaId,
         pedidoId: null,
         clienteId: cliente?.id ?? null,
+        aCuenta: aCuenta && puedeACuenta,
         nombre,
         notas,
         metodoPago: metodo,
@@ -64,7 +76,11 @@ export function DialogoDevolucion({
         })),
       });
 
-      avisos.exito(`Devolución #${r.numero} por ${plata(r.total)}. La mercadería volvió al stock.`);
+      avisos.exito(
+        r.aCuenta
+          ? `Devolución #${r.numero}: ${plata(r.total)} descontados de lo que debe. Ahora debe ${plata(r.deudaCliente)}.`
+          : `Devolución #${r.numero} por ${plata(r.total)}. La mercadería volvió al stock.`
+      );
       onHecha();
       onCerrar();
     } catch (e) {
@@ -88,7 +104,7 @@ export function DialogoDevolucion({
           <Boton
             tono="principal"
             onClick={() => void devolver()}
-            disabled={trabajando || items.length === 0}
+            disabled={trabajando || items.length === 0 || excedeDeuda || items.some((i) => i.cantidad <= 0)}
           >
             {trabajando ? "Registrando…" : `Devolver ${plata(total)}`}
           </Boton>
@@ -143,11 +159,11 @@ export function DialogoDevolucion({
                   className="h-8 w-16 rounded border border-linea-fuerte bg-papel px-2 text-right text-base tabular-nums"
                   inputMode="numeric"
                   aria-label={`Cantidad de ${item.nombre}`}
-                  value={item.cantidad}
+                  value={item.cantidad === 0 ? "" : item.cantidad}
                   onChange={(e) =>
                     setItems((previos) =>
                       previos.map((i, x) =>
-                        x === indice ? { ...i, cantidad: Math.max(1, Number(e.target.value) || 1) } : i
+                        x === indice ? { ...i, cantidad: enteroEscrito(e.target.value, i.cantidad) } : i
                       )
                     )
                   }
@@ -161,7 +177,7 @@ export function DialogoDevolucion({
                   onChange={(e) =>
                     setItems((previos) =>
                       previos.map((i, x) =>
-                        x === indice ? { ...i, precio: Math.max(0, Number(e.target.value) || 0) } : i
+                        x === indice ? { ...i, precio: enteroEscrito(e.target.value, i.precio) } : i
                       )
                     )
                   }
@@ -187,10 +203,13 @@ export function DialogoDevolucion({
               <button
                 key={medio}
                 type="button"
-                onClick={() => setMetodo(medio)}
+                onClick={() => {
+                  setMetodo(medio);
+                  setACuenta(false);
+                }}
                 className={cn(
                   "rounded border px-2.5 py-1.5 text-chico transition-colors",
-                  metodo === medio
+                  !aCuenta && metodo === medio
                     ? "border-transparent bg-acento text-white shadow-acento"
                     : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
                 )}
@@ -198,14 +217,39 @@ export function DialogoDevolucion({
                 {ETIQUETA_PAGO[medio]}
               </button>
             ))}
+            {puedeACuenta && (
+              <button
+                type="button"
+                onClick={() => setACuenta(true)}
+                className={cn(
+                  "rounded border px-2.5 py-1.5 text-chico transition-colors",
+                  aCuenta
+                    ? "border-transparent bg-acento text-white shadow-acento"
+                    : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                )}
+              >
+                A cuenta (baja lo que debe)
+              </button>
+            )}
           </div>
+          {aCuenta && cliente && (
+            <p className={cn("text-chico", excedeDeuda ? "text-alerta-texto" : "text-tinta-suave")}>
+              {excedeDeuda
+                ? `Debe ${plata(cliente.debe)}: a cuenta se puede devolver hasta eso. Por el resto, hacé otra devolución en efectivo.`
+                : `No sale plata del cajón: debe ${plata(cliente.debe)} y va a quedar debiendo ${plata(cliente.debe - total)}.`}
+            </p>
+          )}
         </div>
 
         <SelectorCliente
           nombre={nombre}
           onNombre={setNombre}
           cliente={cliente}
-          onCliente={setCliente}
+          onCliente={(elegido) => {
+            setCliente(elegido);
+            // Si ahora no hay cliente, o no debe nada, "a cuenta" deja de tener sentido.
+            if (!elegido || elegido.debe <= 0) setACuenta(false);
+          }}
           ayuda="Quién devuelve. Si está en la agenda, la devolución queda en su ficha."
         />
 

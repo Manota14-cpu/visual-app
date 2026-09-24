@@ -236,3 +236,22 @@ export function normalizarTexto(texto: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/**
+ * Lo que se escribe en un campo de cantidad o de precio de un renglón.
+ *
+ * Vacío es 0 mientras se edita, y no "1": antes, al borrar el número para
+ * escribir otro, el campo volvía a 1 y lo que se tecleaba se le pegaba atrás.
+ * En un producto por peso, borrar los 1000 g para poner 250 dejaba "1250" y se
+ * cobraba kilo y cuarto. Quien usa el valor tiene que frenar los ceros antes
+ * de guardar.
+ *
+ * Se lee como se escribe acá: "1.250" son mil doscientos cincuenta. Lo que no
+ * es un número deja el valor que había.
+ */
+export function enteroEscrito(texto: string, anterior: number): number {
+  if (texto.trim() === "") return 0;
+  const n = leerNumero(texto);
+  if (n === null || n < 0) return anterior;
+  return Math.round(n);
+}

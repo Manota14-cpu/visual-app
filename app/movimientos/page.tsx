@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { useDatos, useEspera } from "@/lib/datos";
 import { consulta } from "@/lib/api";
-import { fechaHora, numero } from "@/lib/formato";
+import { cantidadEscrita, fechaHora } from "@/lib/formato";
 import type { PaginaMovimientos } from "@/lib/tipos";
 
 const ETIQUETA_TIPO: Record<string, string> = {
@@ -148,10 +148,10 @@ export default function PaginaMovimientos() {
                           }
                         >
                           {suma ? "+" : "−"}
-                          {numero(movimiento.cantidad)}
+                          {cantidadEscrita(movimiento.cantidad, movimiento.porPeso)}
                         </td>
                         <td className="cifra text-right text-tinta-suave">
-                          {numero(movimiento.stockResultante)}
+                          {cantidadEscrita(movimiento.stockResultante, movimiento.porPeso)}
                         </td>
                         <td className="max-w-[260px] text-tinta-suave">
                           <span className="block truncate">{movimiento.motivo ?? "—"}</span>

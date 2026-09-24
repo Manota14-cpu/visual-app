@@ -6,7 +6,8 @@ import { Aviso, Boton, Campo, Dialogo, Hoja, Selector, Vacio } from "@/component
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
 import { api, consulta } from "@/lib/api";
-import { numero, plata } from "@/lib/formato";
+import { guardarPdf, imprimir } from "@/lib/escritorio";
+import { enteroEscrito, numero, plata } from "@/lib/formato";
 import { barrasDe, sePuedeDibujar } from "@/lib/codigo-barras";
 import type { Categoria, PlanillaRecuento } from "@/lib/tipos";
 import { BuscadorProductos } from "../caja/buscador-productos";
@@ -18,7 +19,7 @@ import { BuscadorProductos } from "../caja/buscador-productos";
  * código de fábrica para pegarles, así que el lector del mostrador no sirve
  * para la mitad del catálogo y hay que buscar todo tecleando.
  *
- * La hoja se arma en pantalla y se imprime con el navegador: no hay que
+ * La hoja se arma en pantalla y se imprime con el cuadro de Windows: no hay que
  * instalar nada ni configurar una impresora especial. Sale en cualquier
  * impresora común, en hoja A4.
  */
@@ -167,14 +168,27 @@ export default function PaginaEtiquetas() {
       titulo="Etiquetas"
       descripcion="Imprimí etiquetas con código de barras para lo que hacés vos."
       acciones={
-        <Boton
-          tono="principal"
-          icono="imprimir"
-          onClick={() => window.print()}
-          disabled={etiquetas.length === 0}
-        >
-          Imprimir {etiquetas.length > 0 ? numero(etiquetas.length) : ""}
-        </Boton>
+        <>
+          <Boton
+            icono="archivo"
+            onClick={() =>
+              void guardarPdf(`Etiquetas ${new Date().toLocaleDateString("es-AR").replaceAll("/", "-")}`).catch(
+                (e: Error) => avisos.error(e.message)
+              )
+            }
+            disabled={etiquetas.length === 0}
+          >
+            Guardar PDF
+          </Boton>
+          <Boton
+            tono="principal"
+            icono="imprimir"
+            onClick={() => void imprimir().catch((e: Error) => avisos.error(e.message))}
+            disabled={etiquetas.length === 0}
+          >
+            Imprimir {etiquetas.length > 0 ? numero(etiquetas.length) : ""}
+          </Boton>
+        </>
       }
     >
       <div className="flex flex-col gap-4">
@@ -248,12 +262,12 @@ export default function PaginaEtiquetas() {
                       <Campo
                         aria-label={`Cuántas de ${r.nombre}`}
                         inputMode="numeric"
-                        value={String(r.cantidad)}
+                        value={r.cantidad === 0 ? "" : String(r.cantidad)}
                         onChange={(e) =>
                           setRenglones((previos) =>
                             previos.map((x) =>
                               x.id === r.id
-                                ? { ...x, cantidad: Math.max(1, Number(e.target.value) || 1) }
+                                ? { ...x, cantidad: Math.min(enteroEscrito(e.target.value, x.cantidad), 500) }
                                 : x
                             )
                           )

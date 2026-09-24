@@ -91,7 +91,11 @@ export function rutasRecuento(r: Ruteador, a: Almacen): void {
     "/recuento",
     ({ cuerpo, usuario }) =>
       a.escribir((d) => {
-        const entradas = (cuerpo.lineas ?? []) as { productoId: string; contado: unknown }[];
+        const entradas = (cuerpo.lineas ?? []) as {
+          productoId: string;
+          contado: unknown;
+          esperado?: unknown;
+        }[];
         if (!Array.isArray(entradas) || entradas.length === 0) {
           throw new Regla("No contaste ningún producto.");
         }
@@ -104,10 +108,16 @@ export function rutasRecuento(r: Ruteador, a: Almacen): void {
 
         const fecha = fechaDeHoy();
         const lineas: LineaRecuento[] = [];
+        // Lo que había cuando se contó, por producto. Ver abajo.
+        const alContar = new Map<string, number>();
+        const vistos = new Set<string>();
 
         for (const entrada of entradas) {
           const producto = d.productos.find((p) => p.id === entrada.productoId);
           if (!producto) continue;
+          // El mismo producto dos veces se ajustaría dos veces.
+          if (vistos.has(producto.id)) continue;
+          vistos.add(producto.id);
 
           const contado = entero(entrada.contado, 0);
           if (contado < 0) throw new Regla(`No se puede contar en negativo: "${producto.nombre}".`);
@@ -115,11 +125,21 @@ export function rutasRecuento(r: Ruteador, a: Almacen): void {
             throw new Regla(`La cantidad contada de "${producto.nombre}" es demasiado grande.`);
           }
 
+          // Lo que decía la planilla cuando se contó. Si mientras tanto la caja
+          // vendió, el stock de ahora ya lo descontó: pisarlo con lo contado
+          // "desvendería" esas ventas. Se ajusta por la diferencia entre lo
+          // contado y lo que se veía al contar, y lo vendido después queda.
+          const esperadoAlContar =
+            typeof entrada.esperado === "number" && Number.isInteger(entrada.esperado) && entrada.esperado >= 0
+              ? entrada.esperado
+              : producto.stock;
+          alContar.set(producto.id, esperadoAlContar);
+
           lineas.push({
             productoId: producto.id,
             nombre: producto.nombre,
             porPeso: producto.porPeso,
-            esperado: producto.stock,
+            esperado: esperadoAlContar,
             contado,
             costo: producto.precioCosto,
           });
@@ -141,7 +161,7 @@ export function rutasRecuento(r: Ruteador, a: Almacen): void {
         // Recién ahora se toca el stock. Si alguna línea fuera inválida, el
         // `escribir` del almacén revierte todo y no queda nada a medias.
         for (const linea of lineas) {
-          const diferencia = linea.contado - linea.esperado;
+          const diferencia = linea.contado - (alContar.get(linea.productoId) ?? linea.esperado);
           if (diferencia === 0) continue;
 
           ajustarStock(

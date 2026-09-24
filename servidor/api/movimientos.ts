@@ -54,6 +54,8 @@ export function rutasMovimientos(r: Ruteador, a: Almacen): void {
             tipo: m.tipo,
             cantidad: m.cantidad,
             stockResultante: m.stockResultante,
+            // Para que la pantalla escriba "250 g" y no "250".
+            porPeso: producto?.porPeso ?? false,
             motivo: m.motivo,
       usuario: m.usuario,
             creadoEn: m.creadoEn,

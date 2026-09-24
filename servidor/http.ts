@@ -24,6 +24,8 @@ export interface Contexto {
    * funciona como siempre y no hay a quién atribuirle nada.
    */
   usuario: Usuario | null;
+  /** El token de la sesión con que llegó el pedido, si trae uno. */
+  token: string | null;
 }
 
 type Manejador = (ctx: Contexto) => unknown | Promise<unknown>;
@@ -52,6 +54,7 @@ export type Permiso = "libre" | "empleado" | "dueno";
 export interface Acceso {
   usuario: Usuario | null;
   exigir: boolean;
+  token?: string | null;
 }
 
 /** Sin usuarios cargados no se le pide nada a nadie. */
@@ -189,9 +192,13 @@ export class Ruteador {
       if (negado) return { encontrada: true, resultado: negado };
 
       const params: Record<string, string> = {};
-      ruta.nombres.forEach((nombre, i) => {
-        params[nombre] = decodeURIComponent(coincidencia[i + 1] ?? "");
-      });
+      try {
+        ruta.nombres.forEach((nombre, i) => {
+          params[nombre] = decodeURIComponent(coincidencia[i + 1] ?? "");
+        });
+      } catch {
+        return { encontrada: true, resultado: new Respuesta(400, { error: "Esa dirección está mal formada." }) };
+      }
 
       return {
         encontrada: true,
@@ -200,6 +207,7 @@ export class Ruteador {
           consulta,
           cuerpo,
           usuario: acceso.usuario,
+          token: acceso.token ?? null,
         }),
       };
     }

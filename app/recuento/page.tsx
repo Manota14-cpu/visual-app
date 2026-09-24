@@ -17,7 +17,7 @@ import {
 import { useAvisos } from "@/components/avisos";
 import { useDatos } from "@/lib/datos";
 import { api, consulta, ErrorApi } from "@/lib/api";
-import { cantidadEscrita, dia, fechaHora, numero, plata } from "@/lib/formato";
+import { cantidadEscrita, dia, fechaHora, leerNumero, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import type { Categoria, PlanillaRecuento, ResumenRecuento } from "@/lib/tipos";
 
@@ -61,11 +61,36 @@ export default function PaginaRecuento() {
 
   // Solo lo que alguien escribió. Un campo vacío no es "hay cero": es "esto
   // todavía no lo conté", y confundirlos pondría en cero medio depósito.
-  const lineas = useMemo(
+  //
+  // El número se lee como se escribe acá: "1.200" son mil doscientos. Con
+  // `Number` era 1,2 —el stock quedaba en 1— y cualquier cosa que no fuera un
+  // número llegaba como cero. Lo que no se entiende no se manda.
+  //
+  // Va con lo que decía la planilla al contar (`esperado`): si mientras se
+  // cuenta la caja sigue vendiendo, el servidor ajusta por la diferencia y no
+  // pisa el stock, que borraría esas ventas.
+  const lineas = useMemo(() => {
+    const porId = new Map((planilla?.productos ?? []).map((p) => [p.id, p]));
+    return Object.entries(contado)
+      .filter(([, v]) => v.trim() !== "")
+      .map(([productoId, v]) => ({
+        productoId,
+        contado: leerNumero(v),
+        esperado: porId.get(productoId)?.esperado ?? null,
+      }))
+      .filter((l): l is { productoId: string; contado: number; esperado: number | null } =>
+        l.contado !== null && Number.isInteger(l.contado) && l.contado >= 0
+      );
+  }, [contado, planilla]);
+
+  // Lo escrito que no es un número entero: se marca para que se corrija.
+  const malEscritos = useMemo(
     () =>
-      Object.entries(contado)
-        .filter(([, v]) => v.trim() !== "")
-        .map(([productoId, v]) => ({ productoId, contado: Number(v) })),
+      Object.entries(contado).filter(([, v]) => {
+        if (v.trim() === "") return false;
+        const n = leerNumero(v);
+        return n === null || !Number.isInteger(n) || n < 0;
+      }).length,
     [contado]
   );
 
@@ -108,7 +133,7 @@ export default function PaginaRecuento() {
           tono="principal"
           icono="listo"
           onClick={() => void aplicar()}
-          disabled={guardando || lineas.length === 0}
+          disabled={guardando || lineas.length === 0 || malEscritos > 0}
         >
           {guardando
             ? "Aplicando…"
@@ -136,6 +161,14 @@ export default function PaginaRecuento() {
             ))}
           </Selector>
         </div>
+
+        {malEscritos > 0 && (
+          <p className="rounded-md border border-alerta-linea bg-alerta-fondo px-3 py-2 text-base text-alerta-texto">
+            {malEscritos === 1
+              ? "Hay una cantidad que no es un número entero. Corregila para poder aplicar."
+              : `Hay ${numero(malEscritos)} cantidades que no son números enteros. Corregilas para poder aplicar.`}
+          </p>
+        )}
 
         {lineas.length > 0 && (
           <div className="hoja flex flex-wrap items-center justify-between gap-3 px-4 py-3">

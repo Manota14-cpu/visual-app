@@ -301,9 +301,14 @@ export function deudaTotal(d: BaseDatos): number {
   return fiado - cobrado;
 }
 
-/** Los cobros de fiado que entraron durante un turno. */
+/**
+ * Los cobros de fiado que entraron durante un turno.
+ *
+ * Sin las devoluciones a cuenta: bajan la deuda igual que un pago, pero no es
+ * plata que haya entrado, y el turno las mostraba como "cobrado de deudas".
+ */
 export function cobrosFiadoDe(d: BaseDatos, cajaId: string) {
-  return d.cobrosFiado.filter((c) => c.cajaId === cajaId);
+  return d.cobrosFiado.filter((c) => c.cajaId === cajaId && c.metodo !== "devolucion");
 }
 
 // ─────────────────────────────────  Gastos  ─────────────────────────────────

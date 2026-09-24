@@ -3,6 +3,7 @@ import { noEncontrado, type Ruteador } from "../http.ts";
 import { esDueno } from "../usuarios.ts";
 import {
   ajustarStock,
+  contarRenglones,
   contiene,
   entero,
   importeRenglon,
@@ -216,19 +217,37 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
         );
       }
 
+      const subtotal = nuevos.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
+
+      // El descuento que se hizo al cobrar se conserva. Antes el total se
+      // recalculaba con los renglones solos y el descuento desaparecía: el
+      // cajón pasaba a esperar plata que nunca entró, y el arqueo daba faltante.
+      // Si la venta quedó más chica que el descuento, el descuento se achica
+      // con ella: una venta no puede dar negativo.
+      pedido.descuento = Math.min(pedido.descuento ?? 0, subtotal);
+
       pedido.items = nuevos;
-      pedido.total = nuevos.reduce((s, i) => s + importeRenglon(i.precio, i.cantidad, i.porPeso), 0);
+      pedido.total = subtotal - pedido.descuento;
       pedido.nombre = recortar(cuerpo.nombre as string, 160) ?? pedido.nombre;
       pedido.notas = recortar(cuerpo.notas as string, 1000);
 
-      // Si la venta se cobró por caja, el desglose de pagos tiene que seguir
-      // sumando el total: si no, el arqueo daría distinto.
-      if (pedido.pagos.length === 1) {
+      const pagado = pedido.pagos.reduce((s, p) => s + p.monto, 0);
+
+      if (pedido.metodoPago === "fiado") {
+        // En una venta fiada los pagos son lo que el cliente entregó de verdad,
+        // no el total. Igualarlos al total la daba por pagada: la deuda
+        // desaparecía y el cajón esperaba una plata que nunca entró. Lo único
+        // que no puede pasar es que ahora valga menos de lo que ya entregó.
+        if (pagado > pedido.total) {
+          throw new Regla(
+            "El cliente ya entregó más de lo que quedaría la venta. Registrá una devolución en vez de editarla."
+          );
+        }
+      } else if (pedido.pagos.length === 1) {
+        // Si la venta se cobró por caja, el desglose de pagos tiene que seguir
+        // sumando el total: si no, el arqueo daría distinto.
         pedido.pagos[0]!.monto = pedido.total;
-      } else if (
-        pedido.pagos.length > 1 &&
-        pedido.pagos.reduce((s, p) => s + p.monto, 0) !== pedido.total
-      ) {
+      } else if (pedido.pagos.length > 1 && pagado !== pedido.total) {
         throw new Regla(
           "Esta venta se pagó con varios medios. Anulala y volvé a cobrarla en vez de editarla."
         );
@@ -318,7 +337,9 @@ export function vista(d: BaseDatos, p: Pedido, verCostos = true) {
     // es del negocio: sin este recorte, la pantalla de Ventas le contaba el
     // costo y el margen a cualquiera que abriera una venta.
     items: verCostos ? p.items : p.items.map(({ costo: _costo, ...resto }) => resto),
-    unidades: p.items.reduce((s, i) => s + i.cantidad, 0),
+    // Separados: media venta de pan no son "500 unidades".
+    unidades: contarRenglones(p.items).unidades,
+    gramos: contarRenglones(p.items).gramos,
     creadoEn: p.creadoEn,
   };
 }

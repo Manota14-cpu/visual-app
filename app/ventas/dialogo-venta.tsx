@@ -6,7 +6,7 @@ import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
-import { cantidadEscrita, fechaHora, importeRenglon, plata } from "@/lib/formato";
+import { cantidadEscrita, enteroEscrito, fechaHora, importeRenglon, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type EstadoPedido, type ItemPedido, type Pedido } from "@/lib/tipos";
 import { BuscadorProductos } from "@/app/caja/buscador-productos";
@@ -129,7 +129,11 @@ export function DialogoVenta({
             <Boton onClick={() => setEditando(false)} disabled={trabajando}>
               Cancelar
             </Boton>
-            <Boton tono="principal" onClick={() => void guardar()} disabled={trabajando}>
+            <Boton
+              tono="principal"
+              onClick={() => void guardar()}
+              disabled={trabajando || items.some((i) => i.cantidad <= 0)}
+            >
               {trabajando ? "Guardando…" : `Guardar ${plata(total)}`}
             </Boton>
           </>
@@ -239,11 +243,11 @@ export function DialogoVenta({
                     className="h-8 w-16 rounded border border-linea-fuerte px-2 text-right text-base tabular-nums"
                     inputMode="numeric"
                     aria-label={`Cantidad de ${item.nombre}`}
-                    value={item.cantidad}
+                    value={item.cantidad === 0 ? "" : item.cantidad}
                     onChange={(e) =>
                       setItems((previos) =>
                         previos.map((i, x) =>
-                          x === indice ? { ...i, cantidad: Math.max(1, Number(e.target.value) || 1) } : i
+                          x === indice ? { ...i, cantidad: enteroEscrito(e.target.value, i.cantidad) } : i
                         )
                       )
                     }
@@ -256,7 +260,7 @@ export function DialogoVenta({
                     onChange={(e) =>
                       setItems((previos) =>
                         previos.map((i, x) =>
-                          x === indice ? { ...i, precio: Math.max(0, Number(e.target.value) || 0) } : i
+                          x === indice ? { ...i, precio: enteroEscrito(e.target.value, i.precio) } : i
                         )
                       )
                     }

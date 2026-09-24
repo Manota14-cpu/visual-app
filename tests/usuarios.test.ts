@@ -11,7 +11,13 @@ import { rutasPedidos } from "../servidor/api/pedidos.ts";
 import { rutasSistema } from "../servidor/api/sistema.ts";
 import { rutasUsuarios } from "../servidor/api/usuarios.ts";
 import { Respuesta, Ruteador, tokenDeCookies, type Acceso } from "../servidor/http.ts";
-import { derivarClave, usuarioDeToken, verificarClave } from "../servidor/usuarios.ts";
+import {
+  derivarClave,
+  hashDeToken,
+  nuevoToken,
+  usuarioDeToken,
+  verificarClave,
+} from "../servidor/usuarios.ts";
 import type { Producto } from "../servidor/tipos.ts";
 
 /**
@@ -33,9 +39,12 @@ let r: Ruteador;
 
 /** Quién hace el pedido. Sin usuarios cargados, la app no pide nada. */
 function como(token: string | null): Acceso {
+  // Igual que `quienPide` en el servidor: con el token, que es lo que
+  // necesita "salir" para saber qué sesión cerrar.
   return a.leer((d) => ({
     usuario: usuarioDeToken(d, token),
     exigir: d.usuarios.some((u) => u.activo),
+    token,
   }));
 }
 
@@ -299,6 +308,27 @@ describe("la sesión", () => {
 
     expect(a.leer((d) => d.sesiones)).toHaveLength(0);
     expect(((await pedir("GET", "/panel", {}, token)) as Respuesta).estado).toBe(401);
+  });
+
+  it("salir en un dispositivo no cierra la sesión del otro", async () => {
+    const compu = await primerDueno("secreta");
+    // El mismo dueño abierto también en el celular. Se crea la sesión directo
+    // y no entrando: otra prueba de este archivo deja a "joaco" con intentos
+    // fallidos, y el freno de intentos haría fallar esta por otra razón.
+    const celular = nuevoToken();
+    a.escribir((d) => {
+      d.sesiones.push({
+        hash: hashDeToken(celular),
+        usuarioId: d.usuarios[0]!.id,
+        creadaEn: new Date().toISOString(),
+        expiraEn: new Date(Date.now() + 3_600_000).toISOString(),
+      });
+    });
+
+    await pedir("POST", "/usuarios/salir", {}, celular);
+
+    expect(((await pedir("GET", "/panel", {}, celular)) as Respuesta).estado).toBe(401);
+    expect(await pedir("GET", "/panel", {}, compu)).not.toBeInstanceOf(Respuesta);
   });
 
   it("cambiar la contraseña cierra las sesiones de esa persona", async () => {

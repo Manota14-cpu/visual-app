@@ -6,6 +6,7 @@ import { useDatos, useEspera } from "@/lib/datos";
 import { api, consulta } from "@/lib/api";
 import { cantidadEscrita, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
+import { BotonCamara } from "@/components/camara-codigos";
 import type { ProductoBuscado } from "@/lib/tipos";
 
 /**
@@ -85,6 +86,7 @@ export async function buscarPorCodigo(codigo: string): Promise<ProductoBuscado |
 export function BuscadorProductos({
   onElegir,
   onNoEncontrado,
+  camara = true,
   autoFocus,
   placeholder = "Buscar producto o escanear código",
 }: {
@@ -97,6 +99,8 @@ export function BuscadorProductos({
   onNoEncontrado?: (codigo: string) => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** El botón para leer con la cámara, al lado del buscador. */
+  camara?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   const [resaltado, setResaltado] = useState(0);
@@ -132,71 +136,77 @@ export function BuscadorProductos({
   }
 
   return (
-    // `data-lector`: el lector de la caja deja que este campo maneje sus
-    // propias lecturas, que ya se resuelven con el Enter de acá abajo.
-    <div className="relative" data-lector="propio">
-      <Buscador
-        ref={entrada}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        value={texto}
-        onChange={(e) => {
-          setTexto(e.target.value);
-          setResaltado(0);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setResaltado((i) => Math.min(i + 1, resultados.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setResaltado((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            const decision = decidirEnter(texto, termino, resultados, activo);
-            if (decision.accion === "elegir") elegir(decision.producto);
-            else if (decision.accion === "codigo") void porCodigo(decision.codigo);
-          } else if (e.key === "Escape") {
-            setTexto("");
-          }
-        }}
-      />
+    <div className="flex items-start gap-2">
+      {/* `data-lector`: el lector de la caja deja que este campo maneje sus
+          propias lecturas, que ya se resuelven con el Enter de acá abajo. */}
+      <div className="relative min-w-0 flex-1" data-lector="propio">
+        <Buscador
+          ref={entrada}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setResaltado(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setResaltado((i) => Math.min(i + 1, resultados.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setResaltado((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              const decision = decidirEnter(texto, termino, resultados, activo);
+              if (decision.accion === "elegir") elegir(decision.producto);
+              else if (decision.accion === "codigo") void porCodigo(decision.codigo);
+            } else if (e.key === "Escape") {
+              setTexto("");
+            }
+          }}
+        />
 
-      {texto.trim().length >= 2 && resultados.length > 0 && (
-        <ul className="vidrio-menu absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-black/[0.07]">
-          {resultados.map((producto, indice) => (
-            <li key={producto.id}>
-              <button
-                type="button"
-                onMouseEnter={() => setResaltado(indice)}
-                onClick={() => elegir(producto)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors",
-                  indice === activo && "bg-acento/[0.08]"
-                )}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate">{producto.nombre}</span>
-                  <span className="block text-chico text-tinta-suave">
-                    {producto.sku ? `${producto.sku} · ` : ""}
-                    {producto.stock > 0
-                      ? producto.porPeso
-                        ? cantidadEscrita(producto.stock, true)
-                        : `${numero(producto.stock)} ${producto.unidadMedida}`
-                      : "sin stock"}
-                  </span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="cifra block font-medium">{plata(producto.precio)}</span>
-                  {producto.porPeso && (
-                    <span className="block text-chico text-tinta-suave">el kilo</span>
+        {texto.trim().length >= 2 && resultados.length > 0 && (
+          <ul className="vidrio-menu absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-black/[0.07]">
+            {resultados.map((producto, indice) => (
+              <li key={producto.id}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setResaltado(indice)}
+                  onClick={() => elegir(producto)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors",
+                    indice === activo && "bg-acento/[0.08]"
                   )}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate">{producto.nombre}</span>
+                    <span className="block text-chico text-tinta-suave">
+                      {producto.sku ? `${producto.sku} · ` : ""}
+                      {producto.stock > 0
+                        ? producto.porPeso
+                          ? cantidadEscrita(producto.stock, true)
+                          : `${numero(producto.stock)} ${producto.unidadMedida}`
+                        : "sin stock"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="cifra block font-medium">{plata(producto.precio)}</span>
+                    {producto.porPeso && (
+                      <span className="block text-chico text-tinta-suave">el kilo</span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* La cámara lee el código y lo busca igual que el lector: si existe,
+          entra; si no, se avisa. */}
+      {camara && <BotonCamara onCodigo={(codigo) => void porCodigo(codigo)} />}
     </div>
   );
 }

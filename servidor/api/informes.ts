@@ -75,9 +75,9 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
       // "costo dudoso" que ya existia no lo agarraba, porque filtra los que
       // tienen costo mayor a cero — justamente al reves del caso mas comun,
       // que es no haberlo cargado nunca.
-      const unidadesSinCosto = renglones
-        .filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
-        .reduce((s, i) => s + i.cantidad, 0);
+      const sinCostoContado = contarRenglones(
+        renglones.filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
+      );
 
       const ingresoSinCosto = renglones
         .filter((i) => i.cantidad > 0 && costoDe(i) <= 0)
@@ -209,7 +209,11 @@ export function rutasInformes(r: Ruteador, a: Almacen): void {
         },
 
         // Lo que el informe no puede medir, dicho en vez de escondido.
-        sinCosto: { unidades: unidadesSinCosto, ingreso: ingresoSinCosto },
+        sinCosto: {
+          unidades: sinCostoContado.unidades,
+          gramos: sinCostoContado.gramos,
+          ingreso: ingresoSinCosto,
+        },
 
         // Vendido no es cobrado. Lo fiado ya esta contado arriba como venta
         // —la mercaderia salio— pero esa plata todavia no entro.

@@ -143,7 +143,7 @@ export class Almacen {
       fs.closeSync(fd);
     }
 
-    fs.renameSync(temporal, this.archivo);
+    renombrarConReintentos(temporal, this.archivo);
   }
 
   /**
@@ -516,6 +516,30 @@ export class Almacen {
   reemplazar(nueva: BaseDatos): void {
     this.datos = nueva;
     this.guardar();
+  }
+}
+
+/**
+ * Renombra, reintentando unos instantes si Windows tiene el archivo tomado.
+ *
+ * En Windows un rename falla con EPERM o EBUSY si otro programa tiene abierto
+ * el destino en ese momento: el antivirus revisándolo, OneDrive subiéndolo, el
+ * indexador de búsqueda. Dura milisegundos, pero sin reintento esa venta se
+ * perdía con un "algo falló" en medio del mostrador. Hasta ocho intentos, en
+ * menos de un segundo en total; si sigue tomado, el error sube como antes.
+ */
+function renombrarConReintentos(desde: string, hacia: string): void {
+  for (let intento = 0; ; intento++) {
+    try {
+      fs.renameSync(desde, hacia);
+      return;
+    } catch (error) {
+      const codigo = (error as NodeJS.ErrnoException).code ?? "";
+      if (intento >= 8 || !["EPERM", "EBUSY", "EACCES"].includes(codigo)) throw error;
+      // Espera sin ocupar el procesador. Es un servidor de un solo hilo, así que
+      // bloquear un instante acá es lo mismo que el guardado ya hace con fsync.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * (intento + 1));
+    }
   }
 }
 

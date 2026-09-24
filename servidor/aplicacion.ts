@@ -110,7 +110,15 @@ export async function iniciarServidor(opciones: OpcionesServidor): Promise<Servi
   rutasUsuarios(api, almacen);
 
   const servidor = http.createServer((req, res) => {
-    void atender(req, res, almacen, sitio, api);
+    // Ningún pedido puede voltear el programa. Un error que se escape de
+    // `atender` se contesta como 500 y se anota: sin esto, una promesa
+    // rechazada sin atender terminaba el proceso —y con él la caja— por una
+    // sola dirección mal escrita.
+    atender(req, res, almacen, sitio, api).catch((error: unknown) => {
+      console.error(`[error] ${req.method} ${req.url}:`, error);
+      if (!res.headersSent) responderJson(res, 500, { error: "Algo falló del lado del programa." });
+      else res.end();
+    });
   });
 
   const puerto = await escuchar(servidor, almacen, opciones.puerto ?? PUERTO_PREFERIDO);
@@ -164,7 +172,18 @@ async function atender(
   }
 
   const direccion = new URL(req.url ?? "/", "http://localhost");
-  const camino = decodeURIComponent(direccion.pathname);
+
+  // `decodeURIComponent` lanza con un "%" que no forma un carácter ("/%E0%A4%A",
+  // "/%zz"). Antes eso pasaba afuera de todo control y tiraba el servidor:
+  // cualquier celular del wifi, con un enlace roto, dejaba la caja sin
+  // programa.
+  let camino: string;
+  try {
+    camino = decodeURIComponent(direccion.pathname);
+  } catch {
+    responderJson(res, 400, { error: "Esa dirección está mal formada." });
+    return;
+  }
 
   if (!camino.startsWith("/api")) {
     sitio.responder(res, camino);
@@ -224,6 +243,7 @@ function quienPide(req: http.IncomingMessage, almacen: Almacen): Acceso {
   return almacen.leer((d) => ({
     usuario: usuarioDeToken(d, token),
     exigir: d.usuarios.some((u) => u.activo),
+    token,
   }));
 }
 

@@ -2,6 +2,7 @@ import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
 import {
   adeudadoDe,
+  comoPlata,
   contiene,
   deudaDe,
   normalizar,
@@ -131,7 +132,12 @@ export function rutasClientes(r: Ruteador, a: Almacen): void {
         .map((c) => ({
           tipo: "pago" as const,
           id: c.id,
-          detalle: c.nota ? `Pago en ${c.metodo} · ${c.nota}` : `Pago en ${c.metodo}`,
+          detalle:
+            c.metodo === "devolucion"
+              ? (c.nota ?? "Devolución")
+              : c.nota
+                ? `Pago en ${c.metodo} · ${c.nota}`
+                : `Pago en ${c.metodo}`,
           monto: -c.monto,
           creadoEn: c.creadoEn,
         }));
@@ -182,6 +188,15 @@ export function rutasClientes(r: Ruteador, a: Almacen): void {
 
       // Archivar, no borrar: sus compras lo nombran, y borrarlo dejaría ventas
       // viejas apuntando a alguien que no existe.
+      //
+      // Con deuda no se archiva: dejaría de aparecer al buscarlo en la caja y
+      // esa plata no se cobraría nunca. Es la misma regla que los proveedores.
+      const deuda = deudaDe(d, cliente.id);
+      if (deuda > 0) {
+        throw new Regla(
+          `${cliente.nombre} todavía debe ${comoPlata(deuda)}. Cobrale o registrá la devolución antes de archivarlo.`
+        );
+      }
       cliente.activo = false;
       return { ok: true };
     }), "dueno");

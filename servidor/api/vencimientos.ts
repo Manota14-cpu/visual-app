@@ -89,11 +89,18 @@ export function rutasVencimientos(r: Ruteador, a: Almacen): void {
 
       // Si el producto ya no existe en el catálogo no hay stock que descontar,
       // pero la partida sí se saca: lo que se tiró, se tiró.
-      if (d.productos.some((p) => p.id === partida.productoId)) {
+      //
+      // Y si parte de la partida ya se vendió, el stock puede estar por debajo
+      // de lo que dice la partida. Se descuenta lo que hay: antes el pedido
+      // fallaba con "stock insuficiente" y la partida vencida no se podía
+      // sacar nunca de la lista.
+      const producto = d.productos.find((p) => p.id === partida.productoId);
+      const descontar = producto ? Math.min(cuanto, producto.stock) : 0;
+      if (producto && descontar > 0) {
         ajustarStock(
           d,
           partida.productoId,
-          -cuanto,
+          -descontar,
           `Vencido el ${partida.fecha}`,
           "salida",
           usuario
