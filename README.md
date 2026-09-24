@@ -249,8 +249,17 @@ por otro `.ico` con al menos 256 × 256 px —o regenerarlo desde el arte con
 - los textos de la interfaz (`app/layout.tsx`, `components/marco.tsx`,
   `app/ingresar/page.tsx`).
 
-No cambiar `appId` (`com.visualsolution.visualapp`): es lo que Windows usa para saber
+No cambiar `appId` (`com.visualsolution.app`): es lo que Windows usa para saber
 que una versión nueva es el mismo programa. Cambiarlo instala uno aparte.
+
+## Desde Visual Solution 3.0.0
+
+La 3.0.0 se publicó con el nombre "Visual Solution". Tiene el mismo `appId`
+que Visual App, así que la actualización la reemplaza en vez de instalarse al
+lado: electron-builder desinstala la vieja, instala la nueva en la misma
+carpeta (`%LOCALAPPDATA%\Programs\Visual Solution`) y renombra los accesos
+directos del menú Inicio y del escritorio a "Visual App". Los datos no se
+tocan: siempre estuvieron en `%LOCALAPPDATA%\Visual App`.
 
 ## Desde Visual App 2.0.0 o anterior
 
