@@ -18,6 +18,9 @@ export default defineConfig([
     // demás en estricto.
     "servidor/**",
     "herramientas/**",
+    // El video es una página suelta con su propio renderizador: no es parte
+    // de la aplicación ni la compila Next.
+    "video/**",
     ".agents/**",
     ".claude/**",
     ".codex/**",

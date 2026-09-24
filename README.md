@@ -283,6 +283,12 @@ cerrarla: las dos escribirían el mismo archivo.
 | `/configuracion` | El archivo de datos, sus copias y el nombre del negocio |
 | `/comprobante?venta=…` | El ticket para imprimir |
 
+## El video
+
+[`video/visual-app.mp4`](video/visual-app.mp4) es la presentación del programa:
+45 segundos en vertical (9:16), con las pantallas de verdad animadas y música
+propia. Cómo está hecho y cómo volver a armarlo, en [`video/`](video/README.md).
+
 ## Cómo está organizado
 
 ```
@@ -306,6 +312,7 @@ servidor/       el backend
   api/          endpoints, uno por área
 build/          recursos del instalador (icon.ico)
 herramientas/   el generador del ícono
+video/          el video de presentación y lo que lo arma
 .github/        el workflow que publica cada versión
 electron-builder.yml   cómo se arma el instalador
 ```
