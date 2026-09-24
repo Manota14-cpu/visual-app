@@ -119,7 +119,7 @@ export function SelectorCliente({
       />
 
       {abierto && (
-        <ul className="vidrio-menu absolute left-0 right-0 top-[62px] z-30 max-h-60 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-black/[0.07]">
+        <ul className="vidrio-menu absolute left-0 right-0 top-[62px] z-30 max-h-60 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-contraste/[0.07]">
           {sugerencias.map((c) => (
             <li key={c.id}>
               <button

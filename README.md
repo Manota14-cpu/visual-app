@@ -141,6 +141,10 @@ viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
    npm version 3.0.1 --no-git-tag-version
    ```
 
+   Y contar qué trae en `build/release-notes.md`: electron-builder lo pone
+   en la publicación de GitHub y el programa lo muestra en el aviso de
+   actualización, en *Configuración → Programa*.
+
 2. Commit y etiqueta:
 
    ```bash
@@ -272,11 +276,11 @@ cerrarla: las dos escribirían el mismo archivo.
 
 | Ruta | Qué hace |
 | --- | --- |
-| `/panel` | Vendido hoy, valor del stock, qué reponer, últimos movimientos |
-| `/caja` | Turno de caja: cobrar, devolver, retiros e ingresos, cierre con arqueo |
+| `/panel` | Vendido hoy contra la semana pasada, valor del stock, qué reponer, últimos movimientos |
+| `/caja` | Turno de caja: cobrar, lo más vendido a un toque, devolver, retiros e ingresos, cierre con arqueo |
 | `/productos` | Catálogo, stock, categorías, precios masivos, historial, exportar e importar |
-| `/ventas` | Todas las ventas, su ficha, cambios de estado y edición de renglones |
-| `/clientes` | Agenda con lo que compró cada uno |
+| `/ventas` | Todas las ventas, su ficha, cambios de estado, edición de renglones y la planilla para Excel |
+| `/clientes` | Agenda con lo que compró cada uno, su cuenta y el recordatorio de deuda por WhatsApp |
 | `/gastos` | Lo que sale, separando la compra de mercadería del gasto operativo |
 | `/informes` | Qué se vendió, con cuánto margen, y qué capital quedó quieto |
 | `/movimientos` | Historial completo de stock |
@@ -288,6 +292,19 @@ cerrarla: las dos escribirían el mismo archivo.
 [`video/visual-app.mp4`](video/visual-app.mp4) es la presentación del programa:
 45 segundos en vertical (9:16), con las pantallas de verdad animadas y música
 propia. Cómo está hecho y cómo volver a armarlo, en [`video/`](video/README.md).
+
+### Atajos de teclado
+
+| Tecla | Dónde | Qué hace |
+| --- | --- | --- |
+| `Ctrl K` | Cualquier pantalla | Busca productos, clientes y secciones |
+| `F2` | Caja | Abre el cobro |
+| `Enter` | Cobro, en «Con cuánto paga» | Cobra |
+| `Ctrl Enter` | Cobro, en cualquier campo | Cobra |
+| `Esc` | Cualquier ventana | La cierra |
+
+Una venta entera se hace sin soltar el teclado: pasar los productos por el
+lector, `F2`, escribir con cuánto paga y `Enter`.
 
 ## Cómo está organizado
 
@@ -326,6 +343,13 @@ Superficies blancas apoyadas sobre un gris muy claro, esquinas amplias, sombras
 en dos capas —una cerca para apoyar, otra lejos y muy abierta para separar del
 fondo— y un solo azul, el del logo, para todo lo accionable. La tipografía es
 la del sistema operativo: SF en Mac, Segoe UI Variable en Windows.
+
+**Claro y oscuro.** Cada color de la interfaz es una variable de
+`app/globals.css` con dos valores: el tema oscuro es gris casi negro de fondo
+con las tarjetas un escalón más claras, como macOS. Se elige abajo de la
+columna —claro, oscuro o como Windows— y se guarda en cada computadora o
+celular, no en los datos del negocio. Lo que se imprime sale siempre claro, y
+la vista previa de las etiquetas también, porque representa papel.
 
 **Dónde va el vidrio.** La barra lateral, el encabezado y la barra inferior del
 teléfono son vidrio esmerilado: el contenido pasa por detrás al desplazarse y se

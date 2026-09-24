@@ -123,7 +123,7 @@ export function DialogoCategorias({
                 className="h-5 w-5 rounded-full border transition-transform hover:scale-110"
                 style={{
                   background: opcion,
-                  borderColor: color === opcion ? "#1D1D1F" : "transparent",
+                  borderColor: color === opcion ? "rgb(var(--tinta))" : "transparent",
                 }}
               />
             ))}
@@ -138,7 +138,7 @@ export function DialogoCategorias({
             >
               <span
                 className="h-3 w-3 shrink-0 rounded-full border border-linea-fuerte"
-                style={{ background: categoria.color ?? "#D2D2D7" }}
+                style={{ background: categoria.color ?? "rgb(var(--linea-fuerte))" }}
               />
 
               {editando === categoria.id ? (

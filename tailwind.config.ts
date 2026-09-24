@@ -1,5 +1,8 @@
 import type { Config } from "tailwindcss";
 
+/** Un color del tema, con la opacidad que pida la clase (`bg-acento/40`). */
+const color = (nombre: string) => `rgb(var(--${nombre}) / <alpha-value>)`;
+
 /**
  * El sistema visual.
  *
@@ -8,41 +11,57 @@ import type { Config } from "tailwindcss";
  * —barra lateral, encabezado, diálogos— y un solo azul para lo accionable.
  * La tipografía es la del sistema: SF en Mac, Segoe Variable en Windows.
  *
+ * Hay un tema oscuro con la misma lógica: gris casi negro de fondo y
+ * tarjetas un escalón más claras. Los valores de los dos están en
+ * app/globals.css.
+ *
  * Los nombres de los tokens son los mismos de siempre (lienzo, papel, tinta,
  * línea): cambia lo que valen, no dónde se usan.
  */
 const config: Config = {
+  // `dark:` para lo poco que no se resuelve con los colores del tema: vale
+  // cuando `<html>` tiene `data-tema="oscuro"` (ver lib/tema.ts).
+  darkMode: ["selector", '[data-tema="oscuro"]'],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
+        // Cada color es una variable de app/globals.css con su valor claro y
+        // su valor oscuro: la pantalla cambia de tema sin que ningún
+        // componente sepa que existe. Los nombres son los de siempre.
+        //
         // El gris de fondo de Apple. Las tarjetas blancas encima se despegan
         // sin necesidad de un borde oscuro.
-        lienzo: "#F5F5F7",
-        papel: "#FFFFFF",
+        lienzo: color("lienzo"),
+        papel: color("papel"),
         // Un negro absoluto vibra sobre blanco; este es el gris casi negro
         // que usa macOS para el texto.
-        tinta: "#1D1D1F",
-        "tinta-media": "#424245",
-        "tinta-suave": "#6E6E73",
-        "tinta-tenue": "#86868B",
+        tinta: color("tinta"),
+        "tinta-media": color("tinta-media"),
+        "tinta-suave": color("tinta-suave"),
+        "tinta-tenue": color("tinta-tenue"),
         // Las separaciones son de un pelo, no una raya.
-        linea: "#EBEBED",
-        "linea-fuerte": "#D2D2D7",
+        linea: color("linea"),
+        "linea-fuerte": color("linea-fuerte"),
+        // Lo que antes era "negro al 4%" para un borde o un fondo apenas
+        // marcado. En el tema oscuro es blanco al 4%: el mismo pelo de
+        // contraste, del lado que corresponde.
+        contraste: color("contraste"),
         // El azul del logo. Es más profundo que el azul de sistema que había
         // antes: sobre blanco contrasta 6,9 a 1 (el otro, 4,7), así que el
         // texto azul chico se lee sin esfuerzo. Al pasar el mouse se oscurece
         // en vez de aclararse, que con un azul así de saturado se nota más.
+        // En el tema oscuro es un punto más claro, o no se leería sobre gris.
         acento: {
-          DEFAULT: "#0050CE",
-          fuerte: "#0044B0",
-          suave: "#EBF1FB",
-          texto: "#0050CE",
+          DEFAULT: color("acento"),
+          fuerte: color("acento-fuerte"),
+          suave: color("acento-suave"),
+          texto: color("acento-texto"),
         },
-        exito: { fondo: "#E8F8EC", texto: "#1D7F35", linea: "#C6EBD0" },
-        aviso: { fondo: "#FFF4E0", texto: "#8A5A00", linea: "#F5DFB4" },
-        alerta: { fondo: "#FFEDEC", texto: "#C2231A", linea: "#F7CFCC" },
-        dato: { fondo: "#EBF1FB", texto: "#0050CE", linea: "#CCDCF5" },
+        exito: { fondo: color("exito-fondo"), texto: color("exito-texto"), linea: color("exito-linea") },
+        aviso: { fondo: color("aviso-fondo"), texto: color("aviso-texto"), linea: color("aviso-linea") },
+        alerta: { fondo: color("alerta-fondo"), texto: color("alerta-texto"), linea: color("alerta-linea") },
+        dato: { fondo: color("dato-fondo"), texto: color("dato-texto"), linea: color("dato-linea") },
       },
       fontFamily: {
         // Fuentes del sistema: la aplicación funciona sin internet, así que no
@@ -86,12 +105,13 @@ const config: Config = {
       boxShadow: {
         // Sombras en capas y muy abiertas: una cerca para apoyar el objeto y
         // otra lejos para separarlo del fondo. Nunca una sola sombra dura.
-        apoyo: "0 1px 2px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)",
-        tarjeta: "0 1px 3px rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.10)",
-        elevada: "0 2px 6px rgba(0,0,0,0.05), 0 16px 40px -16px rgba(0,0,0,0.16)",
-        flotante: "0 8px 20px rgba(0,0,0,0.08), 0 32px 64px -24px rgba(0,0,0,0.28)",
-        boton: "0 1px 2px rgba(0,0,0,0.06)",
-        acento: "0 1px 2px rgba(0,80,206,0.24), 0 6px 16px -8px rgba(0,80,206,0.42)",
+        // Sobre fondo oscuro tienen que ser mucho más negras para verse.
+        apoyo: "var(--sombra-apoyo)",
+        tarjeta: "var(--sombra-tarjeta)",
+        elevada: "var(--sombra-elevada)",
+        flotante: "var(--sombra-flotante)",
+        boton: "var(--sombra-boton)",
+        acento: "var(--sombra-acento)",
       },
       keyframes: {
         entrar: {

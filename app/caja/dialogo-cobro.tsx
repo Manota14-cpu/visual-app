@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Area, Boton, Campo, Dialogo, Etiqueta, Tecla } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
 import { SelectorCliente, type ClienteElegido } from "@/components/selector-cliente";
-import { importeRenglon, leerNumero, numero, plata } from "@/lib/formato";
+import { billetesSugeridos, importeRenglon, leerNumero, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, MEDIOS_PAGO, type ItemCobro, type MedioPago } from "@/lib/tipos";
 
@@ -181,7 +181,36 @@ export function DialogoCobro({
     });
   }
 
+  /**
+   * Enter en «Con cuánto paga» cobra, y Ctrl+Enter cobra desde cualquier
+   * campo. En el mostrador la venta entera se hace sin soltar el teclado:
+   * pasar los productos, F2, escribir con cuánto paga y Enter.
+   */
+  function alTeclear(evento: KeyboardEvent, soloConControl: boolean) {
+    // El Enter del campo sube hasta el contenedor: si ya lo atendió el campo,
+    // no se cobra dos veces.
+    if (evento.key !== "Enter" || evento.defaultPrevented) return;
+    if (soloConControl && !evento.ctrlKey && !evento.metaKey) return;
+    evento.preventDefault();
+    if (listoParaCobrar && !cobrando) void cobrar();
+  }
+
+  // Al abrir, el cursor va a «Con cuánto paga»: es lo único que hay que
+  // escribir en un cobro en efectivo. Sin esto quedaba en la cruz de cerrar, y
+  // el Enter que seguía cerraba el diálogo en vez de cobrar.
+  useEffect(() => {
+    const campo = document.querySelector<HTMLInputElement>("[data-recibido]");
+    const cuadro = requestAnimationFrame(() => campo?.focus());
+    return () => cancelAnimationFrame(cuadro);
+  }, []);
+
+  // Dos Enter seguidos llegan antes de que React redibuje con `cobrando`: sin
+  // esta traba la misma venta viajaba dos veces.
+  const enCurso = useRef(false);
+
   async function cobrar() {
+    if (enCurso.current) return;
+    enCurso.current = true;
     setCobrando(true);
     try {
       const venta = await api.post<{
@@ -217,6 +246,7 @@ export function DialogoCobro({
     } catch (e) {
       avisos.error(e instanceof ErrorApi ? e.message : "No se pudo cobrar.");
     } finally {
+      enCurso.current = false;
       setCobrando(false);
     }
   }
@@ -244,11 +274,12 @@ export function DialogoCobro({
               : fiar
                 ? `Fiar ${plata(falta)}`
                 : `Cobrar ${plata(total)}`}
+            {!cobrando && <Tecla clara>Enter</Tecla>}
           </Boton>
         </>
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" onKeyDown={(e) => alTeclear(e, true)}>
         <div className="flex flex-col gap-2 rounded-md border border-linea bg-lienzo px-4 py-3">
           {descuento > 0 && (
             <>
@@ -300,7 +331,7 @@ export function DialogoCobro({
                   "px-3 py-2 text-base transition-colors",
                   enPorcentaje === opcion.valor
                     ? "bg-acento text-white"
-                    : "text-tinta-suave hover:bg-black/[0.04]"
+                    : "text-tinta-suave hover:bg-contraste/[0.04]"
                 )}
               >
                 {opcion.texto}
@@ -328,7 +359,7 @@ export function DialogoCobro({
                       "rounded border px-2.5 py-1.5 text-chico transition-colors",
                       tramo.metodo === medio
                         ? "border-transparent bg-acento text-white shadow-acento"
-                        : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                        : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
                     )}
                   >
                     {ETIQUETA_PAGO[medio]}
@@ -396,17 +427,50 @@ export function DialogoCobro({
         </div>
 
         {enEfectivo > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Campo
-              etiqueta="Con cuánto paga"
-              inputMode="decimal"
-              placeholder="0"
-              value={recibido}
-              onChange={(e) => setRecibido(e.target.value)}
-            />
-            <div className="flex flex-col justify-end pb-1">
-              <span className="etiqueta-campo">Vuelto</span>
-              <span className="cifra font-titulo text-titulo">{plata(vuelto)}</span>
+          <div className="flex flex-col gap-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Campo
+                etiqueta="Con cuánto paga"
+                inputMode="decimal"
+                placeholder="0"
+                value={recibido}
+                onChange={(e) => setRecibido(e.target.value)}
+                onKeyDown={(e) => alTeclear(e, false)}
+                data-recibido
+              />
+              <div className="flex flex-col justify-end pb-1">
+                <span className="etiqueta-campo">Vuelto</span>
+                <span
+                  className={cn(
+                    "cifra font-titulo text-titulo transition-colors duration-300",
+                    vuelto > 0 && "text-exito-texto"
+                  )}
+                >
+                  {plata(vuelto)}
+                </span>
+              </div>
+            </div>
+            {/* Los billetes con que se suele pagar, a un toque: escribir
+                "20000" con el cliente esperando es más lento que tocarlo. */}
+            <div className="flex flex-wrap gap-1.5" aria-label="Con cuánto paga">
+              {[enEfectivo, ...billetesSugeridos(enEfectivo)].map((monto, i) => {
+                const elegido = Math.round(leerNumero(recibido) ?? -1) === monto;
+                return (
+                  <button
+                    key={monto}
+                    type="button"
+                    onClick={() => setRecibido(String(monto))}
+                    className={cn(
+                      "cifra rounded-full border px-3 py-1 text-chico font-medium transition-all duration-200 ease-suave active:scale-[0.96]",
+                      elegido
+                        ? "border-transparent bg-acento text-white shadow-acento"
+                        : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:border-acento/40 hover:text-acento"
+                    )}
+                  >
+                    {i === 0 ? "Justo" : plata(monto)}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

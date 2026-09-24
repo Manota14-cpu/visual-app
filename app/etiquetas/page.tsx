@@ -297,7 +297,9 @@ export default function PaginaEtiquetas() {
         </div>
 
         {etiquetas.length > 0 && (
-          <div className="hoja p-4 sin-borde-al-imprimir">
+          // Es papel: se ve en el tema claro aunque la pantalla esté en el
+          // oscuro, o las barras negras no se distinguirían del fondo.
+          <div className="hoja siempre-claro p-4 sin-borde-al-imprimir">
             <p className="sin-imprimir etiqueta-campo mb-3">Así va a salir</p>
             <div
               className="grid gap-2"

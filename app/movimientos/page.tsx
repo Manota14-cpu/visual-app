@@ -125,7 +125,7 @@ export default function PaginaMovimientos() {
                   {movimientos.map((movimiento) => {
                     const suma = SUMAN.has(movimiento.tipo);
                     return (
-                      <tr key={movimiento.id} className="transition-colors hover:bg-black/[0.02]">
+                      <tr key={movimiento.id} className="transition-colors hover:bg-contraste/[0.02]">
                         <td className="whitespace-nowrap text-tinta-suave">
                           {fechaHora(movimiento.creadoEn)}
                         </td>

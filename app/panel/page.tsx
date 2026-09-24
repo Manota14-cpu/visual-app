@@ -6,7 +6,8 @@ import { Boton, Cargando, Etiqueta, Hoja, Metrica, Vacio } from "@/components/ui
 import { ColumnasPorDia, BarrasEtiquetadas } from "@/components/grafico";
 import { Icono } from "@/components/iconos";
 import { useDatos } from "@/lib/datos";
-import { cantidadEscrita, hace, llevado, numero, plata } from "@/lib/formato";
+import { cantidadEscrita, diaEntero, hace, llevado, numero, plata, saludo } from "@/lib/formato";
+import { useSesion } from "@/lib/sesion";
 import { cn } from "@/lib/utils";
 import type { Panel, Sistema } from "@/lib/tipos";
 
@@ -21,11 +22,14 @@ const NOMBRE_MOVIMIENTO: Record<string, string> = {
 
 export default function PaginaPanel() {
   const { datos, cargando, error, recargar } = useDatos<Panel>("/panel");
+  const { usuario } = useSesion();
+  // El nombre de pila: "Buenas tardes, Carlos", no "Buenas tardes, Carlos Gómez".
+  const nombre = usuario?.nombre.trim().split(/\s+/)[0];
 
   return (
     <Marco
       titulo="Panel"
-      descripcion="Cómo está el negocio hoy: lo que se vendió, lo que falta reponer y lo que hay que revisar."
+      descripcion={`${saludo()}${nombre ? `, ${nombre}` : ""}. Así viene el negocio este ${diaEntero()}.`}
       acciones={
         <Boton icono="recargar" onClick={() => void recargar()}>
           Actualizar
@@ -49,7 +53,20 @@ export default function PaginaPanel() {
             <Metrica
               rotulo="Vendido hoy"
               valor={plata(datos.hoyVentas.total)}
-              pie={`${numero(datos.hoyVentas.cantidad)} ${datos.hoyVentas.cantidad === 1 ? "venta" : "ventas"} · ${llevado(datos.hoyVentas.unidades, datos.hoyVentas.gramos)}`}
+              insignia={<Comparacion hoy={datos.hoyVentas.total} antes={datos.hoyVentas.semanaPasada} />}
+              pie={
+                <>
+                  <span className="block">
+                    {numero(datos.hoyVentas.cantidad)} {datos.hoyVentas.cantidad === 1 ? "venta" : "ventas"} ·{" "}
+                    {llevado(datos.hoyVentas.unidades, datos.hoyVentas.gramos)}
+                  </span>
+                  {datos.hoyVentas.semanaPasada > 0 && (
+                    <span className="block">
+                      El {DIA_SEMANA.format(new Date())} pasado a esta hora: {plata(datos.hoyVentas.semanaPasada)}
+                    </span>
+                  )}
+                </>
+              }
             />
             {/* A un empleado el servidor no le manda la valuación, y la
                 tarjeta desaparece en vez de mostrar "$0": decir que el depósito
@@ -253,6 +270,32 @@ export default function PaginaPanel() {
         </div>
       )}
     </Marco>
+  );
+}
+
+const DIA_SEMANA = new Intl.DateTimeFormat("es-AR", { weekday: "long" });
+
+/**
+ * Cuánto más o menos que el mismo día de la semana pasada, a esta hora.
+ *
+ * Sin venta que comparar no dice nada: un "+100%" contra cero es un número
+ * que no significa nada, y el primer día de uso lo mostraría siempre.
+ */
+function Comparacion({ hoy, antes }: { hoy: number; antes: number }) {
+  if (antes <= 0) return null;
+  const cambio = Math.round(((hoy - antes) / antes) * 100);
+  const tono = cambio > 0 ? "exito" : cambio < 0 ? "alerta" : "neutral";
+  const texto =
+    cambio === 0
+      ? "Igual que la semana pasada a esta hora"
+      : `${Math.abs(cambio)}% ${cambio > 0 ? "más" : "menos"} que la semana pasada a esta hora`;
+
+  return (
+    <span title={texto} aria-label={texto}>
+      <Etiqueta tono={tono} className="cifra normal-case tracking-normal">
+        {cambio > 0 ? "↑" : cambio < 0 ? "↓" : "="} {numero(Math.abs(cambio))}%
+      </Etiqueta>
+    </span>
   );
 }
 

@@ -145,7 +145,7 @@ export default function PaginaGastos() {
 
                 <CuerpoTabla>
                   {gastos.map((gasto) => (
-                    <tr key={gasto.id} className="transition-colors hover:bg-black/[0.02]">
+                    <tr key={gasto.id} className="transition-colors hover:bg-contraste/[0.02]">
                       <td className="whitespace-nowrap text-tinta-suave">{dia(gasto.fecha)}</td>
                       <td className="max-w-[280px]">
                         <button
@@ -176,7 +176,7 @@ export default function PaginaGastos() {
                             type="button"
                             title="Editar"
                             aria-label={`Editar ${gasto.concepto}`}
-                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05] hover:text-tinta"
+                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05] hover:text-tinta"
                             onClick={() => setEditando(gasto)}
                           >
                             <Icono nombre="editar" tamano={16} />
@@ -185,7 +185,7 @@ export default function PaginaGastos() {
                             type="button"
                             title="Eliminar"
                             aria-label={`Eliminar ${gasto.concepto}`}
-                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05] hover:text-alerta-texto"
+                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05] hover:text-alerta-texto"
                             onClick={() => setBorrando(gasto)}
                           >
                             <Icono nombre="borrar" tamano={16} />

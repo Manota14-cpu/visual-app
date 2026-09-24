@@ -7,6 +7,10 @@ import {
   plata,
   hoy,
   dia,
+  hora,
+  fecha,
+  fechaHora,
+  billetesSugeridos,
 } from "@/lib/formato";
 
 /**
@@ -106,9 +110,47 @@ describe("fechas", () => {
     expect(hoy(referencia)).toBe("2026-01-05");
   });
 
+  it("la hora va de 0 a 23, sin a. m. ni p. m.", () => {
+    // Con el formato de doce horas, "abierto 24 sept · 10:24 p. m." cerraba
+    // con un punto de más.
+    expect(hora(new Date(2026, 8, 24, 22, 24))).toBe("22:24");
+    expect(hora(new Date(2026, 8, 24, 9, 5))).toBe("09:05");
+  });
+
+  it("la fecha corta se escribe con espacio y no con guion", () => {
+    const texto = fecha(new Date(2026, 8, 24, 22, 24));
+    expect(texto).toMatch(/^24 sep/);
+    expect(texto).not.toContain("-");
+    expect(fechaHora(new Date(2026, 8, 24, 22, 24))).toMatch(/^24 sep\S* · 22:24$/);
+  });
+
   it("dia no corre la fecha un día para atrás", () => {
     // El caso que motivó la función: "2026-09-06" leído como instante UTC son
     // las 21 del 5 en Argentina.
     expect(dia("2026-09-06")).toContain("06");
+  });
+});
+
+describe("billetes sugeridos para el vuelto", () => {
+  it("propone los montos redondos con que se suele pagar, de menor a mayor", () => {
+    expect(billetesSugeridos(15200)).toEqual([16000, 20000]);
+    expect(billetesSugeridos(3400)).toEqual([4000, 5000, 10000, 20000]);
+    expect(billetesSugeridos(850)).toEqual([1000, 2000, 5000, 10000]);
+    // «Te doy veinte» tiene que estar aunque haya montos más chicos.
+    expect(billetesSugeridos(10400)).toEqual([11000, 12000, 15000, 20000]);
+  });
+
+  it("no propone el mismo total: para eso está «Justo»", () => {
+    expect(billetesSugeridos(20000)).not.toContain(20000);
+    expect(billetesSugeridos(10000)).toEqual([20000]);
+  });
+
+  it("con un total grande sigue proponiendo de a veinte mil", () => {
+    expect(billetesSugeridos(47300)).toEqual([48000, 50000, 60000]);
+  });
+
+  it("sin nada que cobrar en efectivo no propone nada", () => {
+    expect(billetesSugeridos(0)).toEqual([]);
+    expect(billetesSugeridos(-500)).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Avisos } from "@/components/avisos";
 import { ProveedorSesion } from "@/lib/sesion";
+import { SCRIPT_TEMA } from "@/lib/tema";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,14 +26,25 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#FBFBFA",
+  // La barra del navegador del celular, del color del fondo en cada tema.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F5F5F7" },
+    { media: "(prefers-color-scheme: dark)", color: "#101012" },
+  ],
   width: "device-width",
   initialScale: 1,
 };
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
+    // `data-tema` lo pone el script de abajo antes de que React llegue: la
+    // diferencia con lo que armó el servidor es a propósito.
+    <html lang="es" suppressHydrationWarning>
+      <head>
+        {/* Antes que cualquier otra cosa, para que la pantalla no arranque
+            clara y se oscurezca un instante después. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body>
         <ProveedorSesion>
           <Avisos>{children}</Avisos>

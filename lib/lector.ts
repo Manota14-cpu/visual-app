@@ -76,7 +76,8 @@ export function useLectorDeCodigos(alLeer: (codigo: string) => void, activo = tr
         return;
       }
 
-      if (evento.key.length !== 1) return;
+      // `key` llega vacío cuando el navegador autocompleta un campo.
+      if (evento.key?.length !== 1) return;
 
       if (!seguida) {
         // Primera tecla de lo que puede ser una ráfaga.

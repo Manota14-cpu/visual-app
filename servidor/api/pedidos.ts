@@ -13,6 +13,100 @@ import {
 } from "../reglas.ts";
 import { ESTADOS_PEDIDO, type BaseDatos, type EstadoPedido, type ItemPedido, type Pedido } from "../tipos.ts";
 import { paginar } from "./catalogo.ts";
+import { armarCsv } from "../csv.ts";
+import { diaLocal } from "./panel.ts";
+
+/**
+ * Las ventas que pide la pantalla, con sus filtros: estado, canal, días y lo
+ * que se escribió en el buscador. Lo usan la lista y la planilla, así la
+ * planilla trae exactamente lo que se estaba mirando.
+ */
+function filtrarPedidos(d: BaseDatos, consulta: URLSearchParams): Pedido[] {
+  let pedidos = [...d.pedidos];
+
+  const estado = consulta.get("estado");
+  if (estado && estado !== "todos") pedidos = pedidos.filter((p) => p.estado === estado);
+
+  const canal = consulta.get("canal");
+  if (canal && canal !== "todos") pedidos = pedidos.filter((p) => p.canal === canal);
+
+  const dias = entero(consulta.get("dias"), 0);
+  if (dias > 0) {
+    const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
+    pedidos = pedidos.filter((p) => p.creadoEn >= desde);
+  }
+
+  const q = consulta.get("q");
+  if (q) {
+    const termino = normalizar(q);
+    pedidos = pedidos.filter(
+      (p) =>
+        contiene(p.nombre, termino) ||
+        contiene(p.notas, termino) ||
+        String(p.numero).includes(termino) ||
+        p.items.some((i) => contiene(i.nombre, termino))
+    );
+  }
+
+  return pedidos.sort((x, y) => y.numero - x.numero);
+}
+
+const NOMBRE_MEDIO: Record<string, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  otro: "Otro",
+  mixto: "Mixto",
+  fiado: "Fiado",
+  cuenta: "A cuenta",
+};
+
+/**
+ * Las ventas en una planilla, para el contador o para mirarlas en Excel.
+ *
+ * Una fila por venta, con la fecha y la hora en columnas separadas —así se
+ * filtran y se ordenan— y los importes como números sin signo de pesos, que
+ * es lo que Excel suma. Lo que se llevó va resumido en una columna: el detalle
+ * renglón por renglón está en el comprobante.
+ */
+export function planillaDeVentas(d: BaseDatos, pedidos: Pedido[]): string {
+  const dos = (n: number) => String(n).padStart(2, "0");
+  // Un nombre escrito como "=HIPERVINCULO(…)" Excel lo ejecuta como fórmula
+  // al abrir la planilla. Con un apóstrofo adelante lo muestra como texto,
+  // que es lo que es. Solo en lo que escribe una persona: los importes son
+  // números y una devolución tiene que seguir sumando negativo.
+  const texto = (valor: string | null | undefined) =>
+    valor && /^[=+\-@\t\r]/.test(valor) ? `'${valor}` : (valor ?? "");
+  const cantidad = (i: ItemPedido) => {
+    const c = Math.abs(i.cantidad);
+    if (!i.porPeso) return `${c} ×`;
+    return c < 1000 ? `${c} g` : `${String(c / 1000).replace(".", ",")} kg`;
+  };
+
+  const filas: (string | number | null)[][] = [
+    ["Número", "Fecha", "Hora", "Canal", "Estado", "Cliente", "Vendió", "Pago", "Lo que se llevó", "Descuento", "Total"],
+    ...pedidos.map((p) => {
+      const cuando = new Date(p.creadoEn);
+      const cliente = p.clienteId ? d.clientes.find((c) => c.id === p.clienteId)?.nombre : null;
+      return [
+        p.numero,
+        diaLocal(cuando),
+        `${dos(cuando.getHours())}:${dos(cuando.getMinutes())}`,
+        p.canal,
+        p.estado,
+        texto(cliente ?? p.nombre),
+        texto(p.usuario),
+        p.metodoPago ? (NOMBRE_MEDIO[p.metodoPago] ?? p.metodoPago) : "",
+        texto(p.items.map((i) => `${cantidad(i)} ${i.nombre}`).join(" · ")),
+        // Las ventas de antes de que existieran los descuentos no traen el campo.
+        p.descuento ?? 0,
+        p.total,
+      ];
+    }),
+  ];
+
+  return armarCsv(filas);
+}
 
 /**
  * Las ventas ya hechas: las de mostrador, las devoluciones y las que se cargan
@@ -23,35 +117,23 @@ import { paginar } from "./catalogo.ts";
  * que estado y stock se tocan en la misma operación o en ninguna.
  */
 export function rutasPedidos(r: Ruteador, a: Almacen): void {
+  r.get(
+    "/pedidos/exportar",
+    ({ consulta }) =>
+      a.leer((d) => {
+        const pedidos = filtrarPedidos(d, consulta);
+        return {
+          nombre: `ventas-${diaLocal(new Date())}.csv`,
+          contenido: planillaDeVentas(d, pedidos),
+          ventas: pedidos.length,
+        };
+      }),
+    "dueno"
+  );
+
   r.get("/pedidos", ({ consulta, usuario }) =>
     a.leer((d) => {
-      let pedidos = [...d.pedidos];
-
-      const estado = consulta.get("estado");
-      if (estado && estado !== "todos") pedidos = pedidos.filter((p) => p.estado === estado);
-
-      const canal = consulta.get("canal");
-      if (canal && canal !== "todos") pedidos = pedidos.filter((p) => p.canal === canal);
-
-      const dias = entero(consulta.get("dias"), 0);
-      if (dias > 0) {
-        const desde = new Date(Date.now() - dias * 86_400_000).toISOString();
-        pedidos = pedidos.filter((p) => p.creadoEn >= desde);
-      }
-
-      const q = consulta.get("q");
-      if (q) {
-        const termino = normalizar(q);
-        pedidos = pedidos.filter(
-          (p) =>
-            contiene(p.nombre, termino) ||
-            contiene(p.notas, termino) ||
-            String(p.numero).includes(termino) ||
-            p.items.some((i) => contiene(i.nombre, termino))
-        );
-      }
-
-      pedidos.sort((x, y) => y.numero - x.numero);
+      const pedidos = filtrarPedidos(d, consulta);
 
       return {
         ...paginar(pedidos, consulta, 30, (p) => vista(d, p, esDueno(usuario))),

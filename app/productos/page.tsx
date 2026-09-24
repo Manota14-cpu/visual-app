@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useCambioDeDireccion, useOlvidarAlta } from "@/lib/direccion";
 import { Marco } from "@/components/marco";
 import {
   Boton,
@@ -51,8 +52,11 @@ function Catalogo() {
   const parametros = useSearchParams();
   const avisos = useAvisos();
 
-  const [busqueda, setBusqueda] = useState("");
+  // `?q=` llega del buscador de todo el programa (Ctrl+K): abre el catálogo
+  // ya filtrado en el producto elegido.
+  const [busqueda, setBusqueda] = useState(parametros.get("q") ?? "");
   const [estado, setEstado] = useState(parametros.get("estado") ?? "activos");
+
   const [categoria, setCategoria] = useState("");
   const [orden, setOrden] = useState("nombre");
   const [pagina, setPagina] = useState(1);
@@ -70,6 +74,16 @@ function Catalogo() {
   const [abriendoPrecios, setAbriendoPrecios] = useState(false);
   const [eliminando, setEliminando] = useState<Producto | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+
+  const olvidarAlta = useOlvidarAlta();
+  useCambioDeDireccion(parametros, (pedido) => {
+    const q = pedido.get("q");
+    if (q !== null) {
+      setBusqueda(q);
+      setPagina(1);
+    }
+    if (pedido.get("nuevo") === "1") setCreando(true);
+  });
 
   const termino = useEspera(busqueda);
 
@@ -292,7 +306,7 @@ function Catalogo() {
                       <tr
                         key={producto.id}
                         className={cn(
-                          "transition-colors hover:bg-black/[0.02]",
+                          "transition-colors hover:bg-contraste/[0.02]",
                           !producto.activo && "opacity-55"
                         )}
                       >
@@ -319,7 +333,7 @@ function Catalogo() {
                               <span className="inline-flex items-center gap-1">
                                 <span
                                   className="h-2 w-2 rounded-full"
-                                  style={{ background: producto.categoriaColor ?? "#D2D2D7" }}
+                                  style={{ background: producto.categoriaColor ?? "rgb(var(--linea-fuerte))" }}
                                 />
                                 {producto.categoria}
                               </span>
@@ -431,6 +445,7 @@ function Catalogo() {
           onCerrar={() => {
             setCreando(false);
             setEditando(null);
+            olvidarAlta();
           }}
           onGuardado={() => {
             void recargar();
@@ -518,7 +533,7 @@ function Accion({
       aria-label={titulo}
       onClick={onClick}
       className={cn(
-        "rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05]",
+        "rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05]",
         peligroso ? "hover:text-alerta-texto" : "hover:text-tinta"
       )}
     >

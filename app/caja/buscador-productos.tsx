@@ -168,7 +168,7 @@ export function BuscadorProductos({
         />
 
         {texto.trim().length >= 2 && resultados.length > 0 && (
-          <ul className="vidrio-menu absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-black/[0.07]">
+          <ul className="vidrio-menu absolute left-0 right-0 top-full z-30 mt-1.5 max-h-72 animate-entrar overflow-y-auto rounded-md py-1 shadow-elevada ring-1 ring-contraste/[0.07]">
             {resultados.map((producto, indice) => (
               <li key={producto.id}>
                 <button
