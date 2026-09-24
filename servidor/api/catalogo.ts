@@ -17,6 +17,65 @@ import {
 } from "../reglas.ts";
 import type { BaseDatos, Producto } from "../tipos.ts";
 
+/** Lo que necesita la caja de un producto para agregarlo al carrito. */
+function productoBuscado(p: Producto) {
+  return {
+    id: p.id,
+    nombre: p.nombre,
+    sku: p.sku,
+    // Para la etiqueta: si el producto ya tiene código de fábrica, se
+    // imprime ese y no el SKU interno, o el lector del mostrador leería
+    // uno y el catálogo tendría el otro.
+    codigoBarras: p.codigoBarras,
+    precio: p.precioVenta,
+    stock: p.stock,
+    unidadMedida: p.unidadMedida,
+    porPeso: p.porPeso,
+  };
+}
+
+/**
+ * Lo que más se vendió en los últimos treinta días, para tenerlo a un toque
+ * en la caja.
+ *
+ * Se cuenta en cuántas ventas apareció cada producto y no cuántas unidades
+ * salieron: el pan por peso suma miles de gramos por venta y taparía todo lo
+ * demás, y lo que interesa es qué se pide seguido, que es lo que conviene no
+ * tener que buscar. Las devoluciones y lo cancelado no cuentan; lo que se
+ * dio de baja, tampoco.
+ */
+export function productosFrecuentes(d: BaseDatos, ahora: Date, limite = 8) {
+  // Se compara el texto de la fecha antes de convertirla: la caja pide esto
+  // después de cada venta, y un negocio con años de historia tiene decenas de
+  // miles de ventas que no hace falta leer.
+  const desde = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const hasta = ahora.toISOString();
+  const veces = new Map<string, { ventas: number; ultima: number }>();
+
+  for (const pedido of d.pedidos) {
+    if (pedido.creadoEn < desde || pedido.creadoEn > hasta) continue;
+    if (pedido.estado === "cancelado" || pedido.canal === "devolucion") continue;
+    const cuando = new Date(pedido.creadoEn).getTime();
+
+    for (const id of new Set(pedido.items.map((i) => i.productoId))) {
+      if (!id) continue;
+      const previo = veces.get(id) ?? { ventas: 0, ultima: 0 };
+      veces.set(id, { ventas: previo.ventas + 1, ultima: Math.max(previo.ultima, cuando) });
+    }
+  }
+
+  return d.productos
+    .filter((p) => p.activo && veces.has(p.id))
+    .sort((x, y) => {
+      const vx = veces.get(x.id)!, vy = veces.get(y.id)!;
+      // A igual cantidad de ventas, lo que se vendió último: es lo que se
+      // está pidiendo ahora.
+      return vy.ventas - vx.ventas || vy.ultima - vx.ultima || x.nombre.localeCompare(y.nombre, "es");
+    })
+    .slice(0, limite)
+    .map(productoBuscado);
+}
+
 /** Productos y categorías: el catálogo y su stock. */
 export function rutasCatalogo(r: Ruteador, a: Almacen): void {
   // ─────────────────────────────  Categorías  ─────────────────────────────
@@ -175,21 +234,11 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
             x.nombre.localeCompare(y.nombre, "es")
         )
         .slice(0, 12)
-        .map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          sku: p.sku,
-          // Para la etiqueta: si el producto ya tiene código de fábrica, se
-          // imprime ese y no el SKU interno, o el lector del mostrador leería
-          // uno y el catálogo tendría el otro.
-          codigoBarras: p.codigoBarras,
-          precio: p.precioVenta,
-          stock: p.stock,
-          unidadMedida: p.unidadMedida,
-          porPeso: p.porPeso,
-        }));
+        .map(productoBuscado);
     })
   );
+
+  r.get("/productos/frecuentes", () => a.leer((d) => productosFrecuentes(d, new Date())));
 
   r.get("/productos/sin-costo", () =>
     a.leer((d) =>

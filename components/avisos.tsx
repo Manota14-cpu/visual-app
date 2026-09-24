@@ -112,7 +112,7 @@ export function Avisos({ children }: { children: ReactNode }) {
             className={cn(
               // Vidrio, no color plano: el aviso se apoya sobre la pantalla en
               // vez de taparla. El color queda en el ícono y en el texto.
-              "vidrio-menu pointer-events-auto flex animate-entrar items-start gap-2.5 rounded-md px-3.5 py-3 text-base shadow-elevada ring-1 ring-black/[0.06]",
+              "vidrio-menu pointer-events-auto flex animate-entrar items-start gap-2.5 rounded-md px-3.5 py-3 text-base shadow-elevada ring-1 ring-contraste/[0.06]",
               nota.clase === "exito" && "text-exito-texto",
               nota.clase === "error" && "text-alerta-texto",
               nota.clase === "dato" && "text-tinta"

@@ -2,7 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Los dos temas.
+ *
+ * Los colores van como tres números ("245 245 247") para que Tailwind pueda
+ * agregarles opacidad: `bg-acento/40` es `rgb(var(--acento) / 0.4)`.
+ *
+ * El claro es el de siempre y es también el de `.siempre-claro`, que lo
+ * fuerza en lo que representa papel —la vista previa de las etiquetas—: un
+ * código de barras negro sobre gris oscuro no se lee.
+ *
+ * El oscuro vale solo en pantalla. Lo que se imprime sale en el claro sin
+ * pedirlo: una impresora no tiene tema oscuro, y un comprobante con fondo gris
+ * se come el tóner.
+ */
 @layer base {
+  :root,
+  .siempre-claro {
+    color-scheme: light;
+    --lienzo: 245 245 247;
+    --papel: 255 255 255;
+    --tinta: 29 29 31;
+    --tinta-media: 66 66 69;
+    --tinta-suave: 110 110 115;
+    --tinta-tenue: 134 134 139;
+    --linea: 235 235 237;
+    --linea-fuerte: 210 210 215;
+    --contraste: 0 0 0;
+    --acento: 0 80 206;
+    --acento-fuerte: 0 68 176;
+    --acento-suave: 235 241 251;
+    --acento-texto: 0 80 206;
+    --exito-fondo: 232 248 236;
+    --exito-texto: 29 127 53;
+    --exito-linea: 198 235 208;
+    --aviso-fondo: 255 244 224;
+    --aviso-texto: 138 90 0;
+    --aviso-linea: 245 223 180;
+    --alerta-fondo: 255 237 236;
+    --alerta-texto: 194 35 26;
+    --alerta-linea: 247 207 204;
+    --dato-fondo: 235 241 251;
+    --dato-texto: 0 80 206;
+    --dato-linea: 204 220 245;
+    --vidrio: 255 255 255;
+    --borde-hoja: rgba(0, 0, 0, 0.06);
+    --sombra-apoyo: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    --sombra-tarjeta: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.1);
+    --sombra-elevada: 0 2px 6px rgba(0, 0, 0, 0.05), 0 16px 40px -16px rgba(0, 0, 0, 0.16);
+    --sombra-flotante: 0 8px 20px rgba(0, 0, 0, 0.08), 0 32px 64px -24px rgba(0, 0, 0, 0.28);
+    --sombra-boton: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --sombra-acento: 0 1px 2px rgba(0, 80, 206, 0.24), 0 6px 16px -8px rgba(0, 80, 206, 0.42);
+  }
+
+  /*
+   * Oscuro como el de macOS: un fondo casi negro y las tarjetas un escalón
+   * más claras, en vez de tarjetas negras con borde. Los tonos de estado
+   * bajan la luz del fondo y suben la del texto, que si no se apagan.
+   */
+  @media screen {
+    :root[data-tema="oscuro"] {
+      color-scheme: dark;
+      --lienzo: 16 16 18;
+      --papel: 28 28 30;
+      --tinta: 245 245 247;
+      --tinta-media: 209 209 214;
+      --tinta-suave: 174 174 178;
+      --tinta-tenue: 142 142 147;
+      --linea: 44 44 46;
+      --linea-fuerte: 72 72 74;
+      --contraste: 255 255 255;
+      --acento: 40 124 246;
+      --acento-fuerte: 64 142 255;
+      --acento-suave: 23 40 66;
+      --acento-texto: 110 168 255;
+      --exito-fondo: 21 46 29;
+      --exito-texto: 90 214 128;
+      --exito-linea: 36 84 50;
+      --aviso-fondo: 52 40 14;
+      --aviso-texto: 255 200 87;
+      --aviso-linea: 92 70 26;
+      --alerta-fondo: 60 24 22;
+      --alerta-texto: 255 122 112;
+      --alerta-linea: 104 42 38;
+      --dato-fondo: 23 40 66;
+      --dato-texto: 110 168 255;
+      --dato-linea: 36 64 108;
+      --vidrio: 28 28 30;
+      --borde-hoja: rgba(255, 255, 255, 0.07);
+      --sombra-apoyo: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.05);
+      --sombra-tarjeta: 0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+      --sombra-elevada: 0 2px 6px rgba(0, 0, 0, 0.5), 0 16px 40px -16px rgba(0, 0, 0, 0.8);
+      --sombra-flotante: 0 8px 20px rgba(0, 0, 0, 0.5), 0 32px 64px -24px rgba(0, 0, 0, 0.9);
+      --sombra-boton: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --sombra-acento: 0 1px 2px rgba(40, 124, 246, 0.3), 0 6px 16px -8px rgba(40, 124, 246, 0.55);
+    }
+  }
+
+  .siempre-claro {
+    color: rgb(var(--tinta));
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -13,18 +113,27 @@
     @apply bg-lienzo text-tinta font-sans text-base;
   }
 
+  /* Un campo sin fondo propio toma el del navegador, que en el tema oscuro
+     es un gris que no es de la paleta. En el claro esto es blanco, lo mismo
+     que ya ponía el navegador. Una clase `bg-*` le gana igual. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    background-color: rgb(var(--papel));
+  }
+
   /* El foco se ve siempre: media aplicación se usa con el teclado mientras la
      otra mano cuenta plata. Es el azul del logo, el mismo de los botones. */
   :focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 3px rgba(0, 80, 206, 0.32),
-      0 0 0 1px #0050ce;
+      0 0 0 3px rgb(var(--acento) / 0.32),
+      0 0 0 1px rgb(var(--acento));
     border-radius: 8px;
   }
 
   ::selection {
-    background: rgba(0, 80, 206, 0.16);
+    background: rgb(var(--acento) / 0.2);
   }
 
   /* Una barra fina que aparece sobre el contenido, como la de macOS. */
@@ -36,13 +145,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.18);
+    background: rgb(var(--contraste) / 0.18);
     border: 4px solid transparent;
     background-clip: content-box;
     border-radius: 99px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.32);
+    background: rgb(var(--contraste) / 0.32);
     background-clip: content-box;
   }
 
@@ -66,7 +175,7 @@
    */
   .hoja {
     @apply rounded-lg bg-papel shadow-tarjeta;
-    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    border: 0.5px solid var(--borde-hoja);
   }
 
   /**
@@ -78,26 +187,26 @@
    * un panel transparente con el texto encima del contenido.
    */
   .vidrio {
-    background: rgba(255, 255, 255, 0.72);
+    background: rgb(var(--vidrio) / 0.72);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
   }
 
   @supports not (backdrop-filter: blur(1px)) {
     .vidrio {
-      background: rgba(255, 255, 255, 0.96);
+      background: rgb(var(--vidrio) / 0.96);
     }
   }
 
   .vidrio-denso {
-    background: rgba(255, 255, 255, 0.82);
+    background: rgb(var(--vidrio) / 0.82);
     backdrop-filter: saturate(200%) blur(32px);
     -webkit-backdrop-filter: saturate(200%) blur(32px);
   }
 
   @supports not (backdrop-filter: blur(1px)) {
     .vidrio-denso {
-      background: rgba(255, 255, 255, 0.98);
+      background: rgb(var(--vidrio) / 0.98);
     }
   }
 
@@ -113,12 +222,12 @@
    * — y así es como se ven los menús del sistema.
    */
   .vidrio-menu {
-    background: #ffffff;
+    background: rgb(var(--papel));
   }
 
   /* La línea de medio píxel que separa sin pesar. */
   .pelo {
-    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 0.5px solid rgb(var(--contraste) / 0.08);
   }
 
   /**
@@ -148,9 +257,9 @@
   .esperando {
     background-image: linear-gradient(
       100deg,
-      rgba(0, 0, 0, 0.045) 40%,
-      rgba(0, 0, 0, 0.015) 50%,
-      rgba(0, 0, 0, 0.045) 60%
+      rgb(var(--contraste) / 0.045) 40%,
+      rgb(var(--contraste) / 0.015) 50%,
+      rgb(var(--contraste) / 0.045) 60%
     );
     background-size: 200% 100%;
     @apply animate-brillo;

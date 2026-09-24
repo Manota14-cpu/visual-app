@@ -367,7 +367,14 @@ export interface Panel {
   fiado: number | null;
   /** Lo que el negocio debe a proveedores. Null para un empleado. */
   aProveedores: number | null;
-  hoyVentas: { cantidad: number; total: number; unidades: number; gramos: number };
+  hoyVentas: {
+    cantidad: number;
+    total: number;
+    /** Lo vendido el mismo día de la semana pasada, hasta esta misma hora. */
+    semanaPasada: number;
+    unidades: number;
+    gramos: number;
+  };
   caja: {
     id: string;
     numero: number;

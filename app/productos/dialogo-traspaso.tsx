@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Aviso, Boton, Dialogo, Etiqueta } from "@/components/ui";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
+import { descargarTexto } from "@/lib/descargar";
 import { numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import type {
@@ -51,12 +52,7 @@ export function DialogoTraspaso({
     setExportando(true);
     try {
       const r = await api.get<Exportacion>(`/catalogo/exportar${todos ? "?todos=si" : ""}`);
-
-      const enlace = document.createElement("a");
-      enlace.href = URL.createObjectURL(new Blob([r.contenido], { type: "text/csv;charset=utf-8" }));
-      enlace.download = r.nombre;
-      enlace.click();
-      URL.revokeObjectURL(enlace.href);
+      descargarTexto(r.nombre, r.contenido);
 
       avisos.exito(`${numero(r.productos)} productos en ${r.nombre}.`);
     } catch (e) {

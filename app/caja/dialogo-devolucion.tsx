@@ -211,7 +211,7 @@ export function DialogoDevolucion({
                   "rounded border px-2.5 py-1.5 text-chico transition-colors",
                   !aCuenta && metodo === medio
                     ? "border-transparent bg-acento text-white shadow-acento"
-                    : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                    : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
                 )}
               >
                 {ETIQUETA_PAGO[medio]}
@@ -225,7 +225,7 @@ export function DialogoDevolucion({
                   "rounded border px-2.5 py-1.5 text-chico transition-colors",
                   aCuenta
                     ? "border-transparent bg-acento text-white shadow-acento"
-                    : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                    : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
                 )}
               >
                 A cuenta (baja lo que debe)

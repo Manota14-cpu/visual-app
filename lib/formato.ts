@@ -26,11 +26,21 @@ export function porcentaje(valor: number | null | undefined): string {
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" });
 const FECHA_LARGA = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short", year: "numeric" });
-const HORA = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit" });
+// De 0 a 23, como el reloj de la caja y el de cualquier comprobante. Con el
+// formato de doce horas que trae el idioma salía "10:24 p. m.", y al cerrar la
+// oración con un punto quedaba "p. m..".
+const HORA = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
+/**
+ * "24 sept". El idioma lo arma con guion —"24-sept"—, que al lado de una hora
+ * se lee como un código y no como una fecha.
+ */
 export function fecha(valor: string | Date | null | undefined): string {
   if (!valor) return "—";
-  return FECHA.format(new Date(valor));
+  return FECHA.formatToParts(new Date(valor))
+    .filter((parte) => parte.type === "day" || parte.type === "month")
+    .map((parte) => parte.value)
+    .join(" ");
 }
 
 export function fechaLarga(valor: string | Date | null | undefined): string {
@@ -45,8 +55,7 @@ export function hora(valor: string | Date | null | undefined): string {
 
 export function fechaHora(valor: string | Date | null | undefined): string {
   if (!valor) return "—";
-  const d = new Date(valor);
-  return `${FECHA.format(d)} · ${HORA.format(d)}`;
+  return `${fecha(valor)} · ${hora(valor)}`;
 }
 
 /**
@@ -64,6 +73,21 @@ export function hace(valor: string | Date | null | undefined): string {
   if (dias < 31) return `hace ${dias} ${dias === 1 ? "día" : "días"}`;
   const meses = Math.round(dias / 30);
   return `hace ${meses} ${meses === 1 ? "mes" : "meses"}`;
+}
+
+/** Cómo se saluda acá según la hora: de mañana es «buen día», no «buenos días». */
+export function saludo(ahora = new Date()): string {
+  const h = ahora.getHours();
+  if (h >= 5 && h < 12) return "Buen día";
+  if (h >= 12 && h < 20) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+const DIA_ENTERO = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long" });
+
+/** «jueves 24 de septiembre», sin la coma que el idioma pone después del día. */
+export function diaEntero(fecha = new Date()): string {
+  return DIA_ENTERO.format(fecha).replace(",", "");
 }
 
 /** aaaa-mm-dd de hoy, en hora local: el valor por defecto de los formularios. */
@@ -136,6 +160,30 @@ export function leerNumero(texto: string): number | null {
 
   const n = Number(normalizado);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Con cuánto puede pagar alguien un importe en efectivo.
+ *
+ * Los montos redondos que salen de juntar billetes: el próximo múltiplo de
+ * mil, de dos mil, de cinco mil, de diez mil y de veinte mil —el billete más
+ * grande—. Hasta cuatro, de menor a mayor, y nunca el importe exacto: para eso
+ * está el botón «Justo». Con $15.200 propone $16.000 y $20.000, que es lo que
+ * en el mostrador se escucha: «te doy veinte».
+ */
+export function billetesSugeridos(importe: number): number[] {
+  if (!(importe > 0)) return [];
+  const montos = new Set<number>();
+  for (const paso of [1000, 2000, 5000, 10000, 20000]) {
+    montos.add(Math.ceil(importe / paso) * paso);
+  }
+  // Un importe que ya es redondo —$10.000— se paga justo o con el billete
+  // que sigue; nadie da $11.000.
+  montos.add(Math.floor(importe / 20000) * 20000 + 20000);
+  return [...montos]
+    .filter((monto) => monto > importe)
+    .sort((a, b) => a - b)
+    .slice(0, 4);
 }
 
 /** El mismo cálculo que hace el backend, para que la vista previa no discrepe. */

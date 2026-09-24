@@ -19,7 +19,7 @@
 // este proceso valida uno por uno.
 // =====================================================================
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } = require("electron");
 const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -72,7 +72,8 @@ async function arrancar() {
   Menu.setApplicationMenu(null);
   endurecerSesion();
 
-  carga = mostrarCarga();
+  const oscura = await pantallaOscura();
+  carga = mostrarCarga(oscura);
 
   const { iniciarServidor, carpetaDeDatos, usarAnfitrion, OtraCopiaAbierta } = await import(
     pathToFileURL(
@@ -121,7 +122,7 @@ async function arrancar() {
     : `http://127.0.0.1:${servidor.puerto}`;
   origen = new URL(direccion).origin;
 
-  ventana = crearVentana(direccion);
+  ventana = crearVentana(direccion, oscura);
   prepararImpresion();
   prepararPdf();
   prepararActualizaciones();
@@ -135,18 +136,18 @@ async function arrancar() {
  * doble clic. Es una página armada acá mismo con el logo del programa: no
  * depende del servidor, que todavía no arrancó.
  */
-function mostrarCarga() {
+function mostrarCarga(oscura) {
   const logo = leerLogo();
   const html = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>${NOMBRE}</title>
 <style>
-  html,body{margin:0;height:100%;background:#F5F5F7;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:#1D1D1F;-webkit-user-select:none;user-select:none;cursor:default}
+  html,body{margin:0;height:100%;background:${fondoDeVentana(oscura)};font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;color:${oscura ? "#F5F5F7" : "#1D1D1F"};-webkit-user-select:none;user-select:none;cursor:default}
   main{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
   img{width:84px;height:84px}
   h1{margin:6px 0 0;font:600 20px "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;letter-spacing:-.01em}
-  p{margin:0;font-size:13px;color:#6E6E73}
-  .barra{width:120px;height:3px;border-radius:3px;background:#E3E3E8;overflow:hidden}
-  .barra i{display:block;width:40%;height:100%;border-radius:3px;background:#0050CE;animation:ir 1.1s cubic-bezier(.32,.72,0,1) infinite}
+  p{margin:0;font-size:13px;color:${oscura ? "#AEAEB2" : "#6E6E73"}}
+  .barra{width:120px;height:3px;border-radius:3px;background:${oscura ? "#2C2C2E" : "#E3E3E8"};overflow:hidden}
+  .barra i{display:block;width:40%;height:100%;border-radius:3px;background:${oscura ? "#287CF6" : "#0050CE"};animation:ir 1.1s cubic-bezier(.32,.72,0,1) infinite}
   @keyframes ir{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
 </style></head>
 <body><main>
@@ -169,7 +170,7 @@ function mostrarCarga() {
     skipTaskbar: false,
     title: NOMBRE,
     icon: iconoDeVentana(),
-    backgroundColor: "#F5F5F7",
+    backgroundColor: fondoDeVentana(oscura),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false },
   });
 
@@ -206,7 +207,33 @@ function iconoDeVentana() {
   return DESARROLLO ? path.join(RAIZ, "build", "icon.ico") : undefined;
 }
 
-function crearVentana(direccion) {
+/**
+ * Si la pantalla va a salir oscura.
+ *
+ * Para pintar la ventana y la pantalla de carga del mismo color que la
+ * interfaz: con el tema oscuro, una ventana gris clara que se oscurece al
+ * cargar es un fogonazo en la cara. La elección la guarda la interfaz en una
+ * cookie (lib/tema.ts); sin elección, manda Windows.
+ */
+async function pantallaOscura() {
+  let elegido;
+  try {
+    const [cookie] = await session.defaultSession.cookies.get({ name: "visualapp-tema" });
+    elegido = cookie?.value;
+  } catch {
+    // Sin la cookie, lo que diga Windows.
+  }
+  if (elegido === "oscuro") return true;
+  if (elegido === "claro") return false;
+  return nativeTheme.shouldUseDarkColors;
+}
+
+/** El fondo de la interfaz en cada tema (`--lienzo` en app/globals.css). */
+function fondoDeVentana(oscura) {
+  return oscura ? "#101012" : "#F5F5F7";
+}
+
+function crearVentana(direccion, oscura) {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   // En una notebook de 1366 la ventana de 1280 queda justa y con los bordes
   // cortados: ahí conviene arrancar maximizada, como cualquier programa de caja.
@@ -223,7 +250,7 @@ function crearVentana(direccion) {
     icon: iconoDeVentana(),
     // El mismo gris de fondo de la interfaz: sin esto, la ventana aparece
     // blanca un instante antes de pintar la primera pantalla.
-    backgroundColor: "#F5F5F7",
+    backgroundColor: fondoDeVentana(oscura),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

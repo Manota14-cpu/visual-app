@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { Area, Boton, Campo, Cargando, Dialogo, Etiqueta, Vacio } from "@/components/ui";
+import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
 import { fechaHora, leerNumero, plata } from "@/lib/formato";
-import { ETIQUETA_PAGO, MEDIOS_PAGO, type Cliente, type CuentaCliente, type MedioPago } from "@/lib/tipos";
+import { ETIQUETA_PAGO, MEDIOS_PAGO, type Cliente, type CuentaCliente, type MedioPago, type Sistema } from "@/lib/tipos";
+import { enlaceWhatsApp, mensajeDeuda, numeroWhatsApp } from "@/lib/whatsapp";
 import { useDatos } from "@/lib/datos";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +32,7 @@ export function DialogoCuenta({
   const { datos, cargando, recargar } = useDatos<CuentaCliente>(
     cliente ? `/clientes/${cliente.id}/cuenta` : null
   );
+  const { datos: sistema } = useDatos<Sistema>("/sistema", { silencioso: true });
 
   const [monto, setMonto] = useState("");
   const [metodo, setMetodo] = useState<MedioPago>("efectivo");
@@ -96,6 +99,24 @@ export function DialogoCuenta({
           <span className="cifra font-titulo text-cifra">{plata(debe)}</span>
         </div>
 
+        {/* El recordatorio que antes se escribía a mano, con el número y el
+            saldo del día. Se abre WhatsApp con el mensaje escrito y se manda
+            desde ahí: nada sale sin que alguien lo lea antes. */}
+        {debe > 0 && (
+          <a
+            href={enlaceWhatsApp(cliente.telefono, mensajeDeuda(cliente.nombre, debe, sistema?.config.negocio))}
+            target="_blank"
+            rel="noreferrer"
+            className="-mt-1 inline-flex items-center gap-2 self-start rounded-full border border-exito-linea bg-exito-fondo px-3 py-1.5 text-chico font-medium text-exito-texto transition-all duration-200 ease-suave hover:brightness-95 active:scale-[0.97]"
+          >
+            <Icono nombre="mensaje" tamano={15} />
+            Recordarle por WhatsApp
+            {!numeroWhatsApp(cliente.telefono) && (
+              <span className="font-normal opacity-75">· sin número, lo elegís en WhatsApp</span>
+            )}
+          </a>
+        )}
+
         {debe > 0 && (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -125,7 +146,7 @@ export function DialogoCuenta({
                         "rounded-full border px-3 py-1.5 text-chico transition-colors",
                         metodo === m
                           ? "border-acento bg-acento text-white"
-                          : "border-linea-fuerte text-tinta-suave hover:bg-black/[0.04]"
+                          : "border-linea-fuerte text-tinta-suave hover:bg-contraste/[0.04]"
                       )}
                     >
                       {ETIQUETA_PAGO[m]}

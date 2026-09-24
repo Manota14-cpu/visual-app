@@ -16,8 +16,11 @@ import {
   Vacio,
 } from "@/components/ui";
 import { useDatos, useEspera } from "@/lib/datos";
-import { consulta } from "@/lib/api";
-import { fechaHora, llevado, plata } from "@/lib/formato";
+import { api, consulta, ErrorApi } from "@/lib/api";
+import { descargarTexto } from "@/lib/descargar";
+import { useSesion } from "@/lib/sesion";
+import { useAvisos } from "@/components/avisos";
+import { fechaHora, llevado, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type PaginaPedidos, type Pedido } from "@/lib/tipos";
 import { DialogoVenta } from "./dialogo-venta";
@@ -39,6 +42,9 @@ export default function PaginaVentas() {
 
 function Ventas() {
   const parametros = useSearchParams();
+  const avisos = useAvisos();
+  const { esDueno } = useSesion();
+  const [exportando, setExportando] = useState(false);
 
   const [busqueda, setBusqueda] = useState("");
   const [estado, setEstado] = useState(parametros.get("estado") ?? "todos");
@@ -73,14 +79,42 @@ function Ventas() {
     setPagina(1);
   }
 
+  /**
+   * Lo que se está mirando, en una planilla: con los mismos filtros de la
+   * pantalla y todas las páginas, no solo la que se ve.
+   */
+  async function exportar() {
+    setExportando(true);
+    try {
+      const r = await api.get<{ nombre: string; contenido: string; ventas: number }>(
+        `/pedidos/exportar${consulta({ q: termino, estado, canal, dias: dias === "0" ? undefined : dias })}`
+      );
+      descargarTexto(r.nombre, r.contenido);
+      avisos.exito(`${numero(r.ventas)} ${r.ventas === 1 ? "venta" : "ventas"} en ${r.nombre}.`);
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo armar la planilla.");
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <Marco
       titulo="Ventas"
       descripcion="Todo lo que salió: el mostrador, los pedidos y las devoluciones."
       acciones={
-        <Boton icono="recargar" onClick={() => void recargar()}>
-          Actualizar
-        </Boton>
+        <>
+          {/* El historial de ventas es del negocio: el servidor tampoco se lo
+              da a quien atiende. */}
+          {esDueno && (
+            <Boton icono="archivo" onClick={() => void exportar()} disabled={exportando || ventas.length === 0}>
+              {exportando ? "Armando…" : "Exportar a planilla"}
+            </Boton>
+          )}
+          <Boton icono="recargar" onClick={() => void recargar()}>
+            Actualizar
+          </Boton>
+        </>
       }
     >
       <div className="flex flex-col gap-3">
@@ -141,7 +175,7 @@ function Ventas() {
                     <tr
                       key={venta.id}
                       onClick={() => setAbierta(venta)}
-                      className="cursor-pointer transition-colors hover:bg-black/[0.02]"
+                      className="cursor-pointer transition-colors hover:bg-contraste/[0.02]"
                     >
                       <td className="cifra text-tinta-suave">#{venta.numero}</td>
                       <td className="max-w-[260px]">

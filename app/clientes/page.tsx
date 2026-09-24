@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCambioDeDireccion, useOlvidarAlta } from "@/lib/direccion";
 import Link from "next/link";
 import { Marco } from "@/components/marco";
 import {
@@ -27,18 +29,38 @@ import type { Cliente, CompraCliente, Pagina } from "@/lib/tipos";
 import { DialogoCliente } from "./dialogo-cliente";
 
 export default function PaginaClientes() {
-  const avisos = useAvisos();
+  return (
+    <Suspense fallback={<Marco titulo="Clientes"><Cargando filas={6} /></Marco>}>
+      <Agenda />
+    </Suspense>
+  );
+}
 
-  const [busqueda, setBusqueda] = useState("");
+function Agenda() {
+  const avisos = useAvisos();
+  const parametros = useSearchParams();
+
+  // `?q=` y `?nuevo=1` llegan del buscador de todo el programa (Ctrl+K).
+  const [busqueda, setBusqueda] = useState(parametros.get("q") ?? "");
   const [estado, setEstado] = useState("activos");
   const [pagina, setPagina] = useState(1);
 
-  const [creando, setCreando] = useState(false);
+  const [creando, setCreando] = useState(parametros.get("nuevo") === "1");
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [viendo, setViendo] = useState<Cliente | null>(null);
   const [archivando, setArchivando] = useState<Cliente | null>(null);
   const [cobrando, setCobrando] = useState<Cliente | null>(null);
   const [trabajando, setTrabajando] = useState(false);
+
+  const olvidarAlta = useOlvidarAlta();
+  useCambioDeDireccion(parametros, (pedido) => {
+    const q = pedido.get("q");
+    if (q !== null) {
+      setBusqueda(q);
+      setPagina(1);
+    }
+    if (pedido.get("nuevo") === "1") setCreando(true);
+  });
 
   const termino = useEspera(busqueda);
 
@@ -143,7 +165,7 @@ export default function PaginaClientes() {
 
                 <CuerpoTabla>
                   {clientes.map((cliente) => (
-                    <tr key={cliente.id} className="transition-colors hover:bg-black/[0.02]">
+                    <tr key={cliente.id} className="transition-colors hover:bg-contraste/[0.02]">
                       <td className="max-w-[260px]">
                         <button
                           type="button"
@@ -190,7 +212,7 @@ export default function PaginaClientes() {
                             type="button"
                             title="Editar"
                             aria-label={`Editar ${cliente.nombre}`}
-                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05] hover:text-tinta"
+                            className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05] hover:text-tinta"
                             onClick={() => setEditando(cliente)}
                           >
                             <Icono nombre="editar" tamano={16} />
@@ -200,7 +222,7 @@ export default function PaginaClientes() {
                               type="button"
                               title="Archivar"
                               aria-label={`Archivar ${cliente.nombre}`}
-                              className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05] hover:text-alerta-texto"
+                              className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05] hover:text-alerta-texto"
                               onClick={() => setArchivando(cliente)}
                             >
                               <Icono nombre="borrar" tamano={16} />
@@ -210,7 +232,7 @@ export default function PaginaClientes() {
                               type="button"
                               title="Restaurar"
                               aria-label={`Restaurar ${cliente.nombre}`}
-                              className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-black/[0.05] hover:text-tinta"
+                              className="rounded p-1.5 text-tinta-suave transition-colors hover:bg-contraste/[0.05] hover:text-tinta"
                               onClick={() => void restaurar(cliente)}
                             >
                               <Icono nombre="recargar" tamano={16} />
@@ -242,6 +264,7 @@ export default function PaginaClientes() {
           onCerrar={() => {
             setCreando(false);
             setEditando(null);
+            olvidarAlta();
           }}
           onGuardado={() => void recargar()}
         />

@@ -194,7 +194,7 @@ export function DialogoVenta({
                 "rounded border px-2.5 py-1.5 text-chico transition-colors disabled:opacity-50",
                 pedido.estado === estado.valor
                   ? "border-transparent bg-acento text-white shadow-acento"
-                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
               )}
             >
               {estado.etiqueta}

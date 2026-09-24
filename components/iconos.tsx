@@ -43,7 +43,11 @@ export type NombreIcono =
   | "recuento"
   | "puntos"
   | "codigo"
-  | "camara";
+  | "camara"
+  | "sol"
+  | "luna"
+  | "automatico"
+  | "mensaje";
 
 const trazos: Record<NombreIcono, ReactNode> = {
   panel: (
@@ -220,6 +224,28 @@ const trazos: Record<NombreIcono, ReactNode> = {
       <circle cx="5.5" cy="12" r="1.4" />
       <circle cx="12" cy="12" r="1.4" />
       <circle cx="18.5" cy="12" r="1.4" />
+    </>
+  ),
+  // Los tres del tema: claro, oscuro y "el que diga el sistema", que es el
+  // círculo mitad lleno de siempre.
+  sol: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.8v1.9M12 19.3v1.9M5.5 5.5l1.35 1.35M17.15 17.15l1.35 1.35M2.8 12h1.9M19.3 12h1.9M5.5 18.5l1.35-1.35M17.15 6.85l1.35-1.35" />
+    </>
+  ),
+  luna: <path d="M19.8 14.6A8.2 8.2 0 0 1 9.4 4.2a8.2 8.2 0 1 0 10.4 10.4Z" />,
+  automatico: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" />
+    </>
+  ),
+  // Un globo de conversación: el recordatorio que se manda por mensaje.
+  mensaje: (
+    <>
+      <path d="M20.2 11.6a8.1 8.1 0 0 1-11.9 7.2L3.8 20l1.3-4.2a8.1 8.1 0 1 1 15.1-4.2Z" />
+      <path d="M8.6 11.8h.01M12.1 11.8h.01M15.6 11.8h.01" strokeWidth={2.4} />
     </>
   ),
   salir: (

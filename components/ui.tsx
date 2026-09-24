@@ -32,8 +32,8 @@ const tonos: Record<Tono, string> = {
   principal:
     "bg-acento text-white border-transparent shadow-acento hover:bg-acento-fuerte active:scale-[0.97]",
   suave:
-    "bg-papel text-tinta border-linea-fuerte/70 shadow-boton hover:bg-[#FAFAFC] active:scale-[0.97]",
-  fantasma: "bg-transparent text-tinta-suave border-transparent hover:bg-black/[0.04] hover:text-tinta",
+    "bg-papel text-tinta border-linea-fuerte/70 shadow-boton hover:bg-contraste/[0.025] active:scale-[0.97]",
+  fantasma: "bg-transparent text-tinta-suave border-transparent hover:bg-contraste/[0.04] hover:text-tinta",
   peligro:
     "bg-papel text-alerta-texto border-alerta-linea shadow-boton hover:bg-alerta-fondo active:scale-[0.97]",
 };
@@ -65,6 +65,29 @@ export function Boton({
       {icono && <Icono nombre={icono} tamano={chico ? 14 : 16} />}
       {children}
     </button>
+  );
+}
+
+/**
+ * Una tecla, dibujada como tecla: «F2», «Enter», «Ctrl K».
+ *
+ * Los atajos que nadie ve no existen. Va al lado del botón que dispara, chica
+ * y en gris, para que quien usa el mouse no la note y quien la busca la
+ * encuentre. `clara` es para ponerla sobre un botón azul.
+ */
+export function Tecla({ children, clara, className }: { children: ReactNode; clara?: boolean; className?: string }) {
+  return (
+    <kbd
+      className={cn(
+        "hidden min-w-[1.5rem] items-center justify-center rounded-[5px] border px-1 font-sans text-[10.5px] font-medium leading-4 tracking-normal sm:inline-flex",
+        clara
+          ? "border-white/30 bg-white/15 text-white/90"
+          : "border-linea-fuerte bg-lienzo text-tinta-tenue shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]",
+        className
+      )}
+    >
+      {children}
+    </kbd>
   );
 }
 
@@ -266,34 +289,40 @@ export function Metrica({
   valor,
   pie,
   tono,
+  insignia,
 }: {
   rotulo: string;
   valor: ReactNode;
   pie?: ReactNode;
   tono?: "alerta" | "aviso" | "exito";
+  /** Algo chico al lado del número: cuánto subió o bajó. */
+  insignia?: ReactNode;
 }) {
   return (
     <div className="hoja min-w-0 px-4 py-3.5 transition-shadow duration-300 ease-suave hover:shadow-elevada">
       <p className="etiqueta-campo truncate">{rotulo}</p>
-      <p
-        className={cn(
-          // En el celular van de a dos: a 30px "$471.890" no entra en media
-          // pantalla. Un escalón menos alcanza y sigue siendo el número grande.
-          "cifra mt-1.5 break-words font-titulo text-[22px] font-semibold leading-7 sm:text-cifra",
-          tono === "alerta" && "text-alerta-texto",
-          tono === "aviso" && "text-aviso-texto",
-          tono === "exito" && "text-exito-texto"
-        )}
-      >
-        {valor}
-      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p
+          className={cn(
+            // En el celular van de a dos: a 30px "$471.890" no entra en media
+            // pantalla. Un escalón menos alcanza y sigue siendo el número grande.
+            "cifra break-words font-titulo text-[22px] font-semibold leading-7 sm:text-cifra",
+            tono === "alerta" && "text-alerta-texto",
+            tono === "aviso" && "text-aviso-texto",
+            tono === "exito" && "text-exito-texto"
+          )}
+        >
+          {valor}
+        </p>
+        {insignia}
+      </div>
       {pie && <p className="mt-1 text-chico text-tinta-tenue">{pie}</p>}
     </div>
   );
 }
 
 const etiquetas = {
-  neutral: "bg-black/[0.05] text-tinta-media border-transparent",
+  neutral: "bg-contraste/[0.05] text-tinta-media border-transparent",
   exito: "bg-exito-fondo text-exito-texto border-exito-linea",
   aviso: "bg-aviso-fondo text-aviso-texto border-aviso-linea",
   alerta: "bg-alerta-fondo text-alerta-texto border-alerta-linea",
@@ -332,7 +361,7 @@ export function Tabla({ className, children }: { className?: string; children: R
 
 export function EncabezadoTabla({ children }: { children: ReactNode }) {
   return (
-    <thead className="text-left [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-black/[0.06] [&_th]:px-3 [&_th]:py-2 [&_th]:text-micro [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.05em] [&_th]:text-tinta-tenue">
+    <thead className="text-left [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-contraste/[0.06] [&_th]:px-3 [&_th]:py-2 [&_th]:text-micro [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.05em] [&_th]:text-tinta-tenue">
       {children}
     </thead>
   );
@@ -340,7 +369,7 @@ export function EncabezadoTabla({ children }: { children: ReactNode }) {
 
 export function CuerpoTabla({ children }: { children: ReactNode }) {
   return (
-    <tbody className="[&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-b [&_tr]:border-black/[0.05] [&_tr:last-child]:border-0">
+    <tbody className="[&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-b [&_tr]:border-contraste/[0.05] [&_tr:last-child]:border-0">
       {children}
     </tbody>
   );
@@ -411,7 +440,7 @@ export function Paginacion({
   const hasta = Math.min(pagina * porPagina, total);
 
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-black/[0.05] px-4 py-2.5 text-chico text-tinta-suave">
+    <div className="flex items-center justify-between gap-3 border-t border-contraste/[0.05] px-4 py-2.5 text-chico text-tinta-suave">
       <span>
         {desde}–{hasta} de {total}
       </span>
@@ -494,7 +523,7 @@ export function Dialogo({
       ref={referencia}
       className={cn(
         "w-[calc(100vw-2rem)] rounded-xl border-0 bg-papel p-0 text-tinta shadow-flotante",
-        "ring-1 ring-black/[0.06] backdrop:bg-black/25 backdrop:backdrop-blur-[3px] open:animate-entrar",
+        "ring-1 ring-contraste/[0.06] backdrop:bg-black/25 backdrop:backdrop-blur-[3px] open:animate-entrar",
         ancho
       )}
       onClick={(e) => {
@@ -527,7 +556,7 @@ export function Dialogo({
       <div className="max-h-[70vh] overflow-y-auto px-5 py-4">{children}</div>
 
       {pie && (
-        <div className="flex items-center justify-end gap-2 border-t border-black/[0.06] px-5 py-3.5">
+        <div className="flex items-center justify-end gap-2 border-t border-contraste/[0.06] px-5 py-3.5">
           {pie}
         </div>
       )}
@@ -596,7 +625,7 @@ export function Segmentado<T extends string | number>({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex rounded-md bg-black/[0.05] p-[3px]", className)}>
+    <div className={cn("inline-flex rounded-md bg-contraste/[0.05] p-[3px]", className)}>
       {opciones.map((opcion) => (
         <button
           key={String(opcion.valor)}

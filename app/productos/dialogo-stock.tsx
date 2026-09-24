@@ -103,7 +103,7 @@ export function DialogoStock({
                 "flex items-center justify-center gap-2 rounded border px-3 py-2.5 text-base transition-colors",
                 signo === valor
                   ? "border-transparent bg-acento text-white shadow-acento"
-                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
               )}
             >
               {valor > 0 ? "Entra mercadería" : "Sale mercadería"}

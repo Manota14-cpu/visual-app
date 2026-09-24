@@ -2,78 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Icono, type NombreIcono } from "@/components/iconos";
+import { Icono } from "@/components/iconos";
+import { CONFIGURACION, EN_LA_BARRA, grupos, secciones, type Seccion } from "@/components/secciones";
 import { AvisoActualizacion } from "@/components/actualizacion";
-import { Boton, Dialogo } from "@/components/ui";
+import { Boton, Dialogo, Tecla } from "@/components/ui";
+import { Paleta } from "@/components/paleta";
+import { SelectorTema } from "@/components/tema";
 import { useDatos } from "@/lib/datos";
 import { useSesion } from "@/lib/sesion";
 import type { Sistema } from "@/lib/tipos";
-
-type Seccion = { nombre: string; href: string; icono: NombreIcono; soloDueno?: boolean };
-
-/**
- * Las secciones, agrupadas por cuándo se usan, con quien puede entrar a cada una.
- *
- * Doce renglones seguidos son una lista que hay que leer entera para encontrar
- * algo. En tres grupos se busca primero el grupo y después el renglón: lo de
- * todos los días arriba, lo del depósito en el medio y los números del negocio
- * abajo, que es también el orden en que se usan a lo largo de la semana.
- *
- * `soloDueno` esconde el renglón; no es lo que lo impide. Lo que de verdad lo
- * impide es el servidor, que comprueba el permiso en cada ruta. Esto existe
- * para no ofrecerle a alguien una puerta que le va a dar en la cara.
- */
-const grupos: { titulo: string; secciones: Seccion[] }[] = [
-  {
-    titulo: "Día a día",
-    secciones: [
-      { nombre: "Panel", href: "/panel", icono: "panel" },
-      { nombre: "Caja", href: "/caja", icono: "caja" },
-      { nombre: "Ventas", href: "/ventas", icono: "pedidos" },
-      { nombre: "Clientes", href: "/clientes", icono: "clientes" },
-    ],
-  },
-  {
-    titulo: "Depósito",
-    secciones: [
-      { nombre: "Productos", href: "/productos", icono: "productos" },
-      { nombre: "Movimientos", href: "/movimientos", icono: "movimientos" },
-      { nombre: "Vencimientos", href: "/vencimientos", icono: "reloj" },
-      { nombre: "Recuento", href: "/recuento", icono: "recuento", soloDueno: true },
-      { nombre: "Etiquetas", href: "/etiquetas", icono: "etiqueta", soloDueno: true },
-    ],
-  },
-  {
-    titulo: "Negocio",
-    secciones: [
-      { nombre: "Proveedores", href: "/proveedores", icono: "camion", soloDueno: true },
-      { nombre: "Gastos", href: "/gastos", icono: "gastos", soloDueno: true },
-      { nombre: "Informes", href: "/informes", icono: "informes", soloDueno: true },
-    ],
-  },
-];
-
-const secciones = grupos.flatMap((g) => g.secciones);
-
-const CONFIGURACION: Seccion = {
-  nombre: "Configuración",
-  href: "/configuracion",
-  icono: "ajustes",
-  soloDueno: true,
-};
-
-/**
- * Las que van siempre a la vista en la barra del teléfono.
- *
- * Son las cuatro que se abren con el cliente adelante; el resto está a un
- * toque, en "Más". Antes la barra mostraba las cinco primeras de la lista y un
- * "Ajustes" que a quien atiende le daba una pantalla prohibida: vencimientos,
- * movimientos y todo lo del dueño no se podían abrir desde el teléfono.
- */
-const EN_LA_BARRA = ["/panel", "/caja", "/productos", "/ventas"];
 
 /**
  * La marca, arriba de la columna.
@@ -164,6 +104,22 @@ export function Marco({
   const { datos: sistema } = useDatos<Sistema>("/sistema");
   const { usuario, exigeIngreso, cargando, esDueno } = useSesion();
   const [masAbierto, setMasAbierto] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const cerrarBusqueda = useCallback(() => setBuscando(false), []);
+
+  // Ctrl+K (⌘K en una Mac) abre el buscador desde cualquier pantalla. Con otro
+  // diálogo abierto no: un cobro a medio hacer no se tapa con otra cosa.
+  useEffect(() => {
+    const alTeclear = (evento: KeyboardEvent) => {
+      // El autocompletado del navegador manda teclas sin nombre.
+      if (evento.key?.toLowerCase() !== "k" || !(evento.ctrlKey || evento.metaKey)) return;
+      if (document.querySelector("dialog[open]")) return;
+      evento.preventDefault();
+      setBuscando(true);
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, []);
 
   // Sin sesión no se dibuja nada y se va a la pantalla de ingreso. Entrar por
   // la dirección escrita a mano es el caso normal —un acceso directo guardado,
@@ -215,7 +171,7 @@ export function Marco({
   return (
     <div className="flex min-h-screen">
       <aside
-        className="sin-imprimir vidrio sticky top-0 z-30 hidden h-screen w-[236px] shrink-0 flex-col border-r border-black/[0.06] px-3 py-5 lg:flex"
+        className="sin-imprimir vidrio sticky top-0 z-30 hidden h-screen w-[236px] shrink-0 flex-col border-r border-contraste/[0.06] px-3 py-5 lg:flex"
         aria-label="Navegación principal"
       >
         <Link href="/panel" className="mb-5 flex items-center gap-2.5 px-2">
@@ -227,6 +183,16 @@ export function Marco({
             </span>
           </span>
         </Link>
+
+        <button
+          type="button"
+          onClick={() => setBuscando(true)}
+          className="mb-4 flex h-9 items-center gap-2 rounded-md border border-contraste/[0.06] bg-papel/70 px-2.5 text-base text-tinta-tenue shadow-apoyo transition-colors duration-200 ease-suave hover:border-acento/25 hover:text-tinta-suave"
+        >
+          <Icono nombre="buscar" tamano={15} />
+          <span className="flex-1 text-left">Buscar…</span>
+          <Tecla>Ctrl K</Tecla>
+        </button>
 
         {/* En una pantalla baja —una notebook de 768 de alto— la lista entera
             no entra: se desplaza ella sola y la marca y la sesión quedan fijas. */}
@@ -251,6 +217,8 @@ export function Marco({
           </div>
         )}
 
+        <SelectorTema className="mx-1 mt-2" />
+
         {usuario && <QuienEsta />}
       </aside>
 
@@ -258,7 +226,7 @@ export function Marco({
         {/* En el teléfono el encabezado es alto —título, descripción y
             botones— y la lista pasa por debajo a pocos píxeles del texto: con
             el vidrio fino se leían las dos cosas encimadas. Ahí va opaco. */}
-        <header className="sin-imprimir vidrio sticky top-0 z-20 border-b border-black/[0.06] px-4 py-4 max-lg:bg-lienzo lg:px-8 lg:py-6">
+        <header className="sin-imprimir vidrio sticky top-0 z-20 border-b border-contraste/[0.06] px-4 py-4 max-lg:bg-lienzo lg:px-8 lg:py-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               <h1 className="font-titulo text-titulo font-semibold">{titulo}</h1>
@@ -270,7 +238,9 @@ export function Marco({
           </div>
         </header>
 
-        <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-12">
+        {/* Cada pantalla entra con un fundido corto: el cambio se nota sin
+            que el contenido salte de golpe. */}
+        <main className="flex-1 animate-aparecer px-4 pb-28 pt-5 lg:px-8 lg:pb-12">
           {/* La versión nueva se le ofrece al dueño, arriba de cualquier pantalla. */}
           {esDueno && <AvisoActualizacion />}
           {vedada ? <SoloElDueno /> : children}
@@ -280,7 +250,7 @@ export function Marco({
             debajo de los rótulos, y a un rótulo de once píxeles eso lo vuelve
             ilegible. Queda un rastro de desenfoque para que no parezca pegada. */}
         <nav
-          className="sin-imprimir fixed bottom-0 left-0 right-0 z-30 flex items-stretch justify-between border-t border-black/[0.08] bg-papel/[0.96] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.12)] backdrop-blur-xl lg:hidden"
+          className="sin-imprimir fixed bottom-0 left-0 right-0 z-30 flex items-stretch justify-between border-t border-contraste/[0.08] bg-papel/[0.96] pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.12)] backdrop-blur-xl lg:hidden"
           aria-label="Secciones"
         >
           {enLaBarra.map((seccion) => {
@@ -323,6 +293,21 @@ export function Marco({
           pie={usuario ? <QuienEstaEnElTelefono /> : undefined}
         >
           <div className="flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setMasAbierto(false);
+                setBuscando(true);
+              }}
+              className="flex h-11 items-center gap-2.5 rounded-md bg-lienzo px-3.5 text-base text-tinta-tenue"
+            >
+              <Icono nombre="buscar" tamano={17} />
+              Buscar productos, clientes…
+            </button>
+            <div>
+              <p className="etiqueta-campo mb-2">Pantalla</p>
+              <SelectorTema conNombres className="[&_span]:max-[380px]:hidden" />
+            </div>
             {enMas.map((grupo) => (
               <div key={grupo.titulo}>
                 <p className="etiqueta-campo mb-2">{grupo.titulo}</p>
@@ -356,6 +341,8 @@ export function Marco({
             ))}
           </div>
         </Dialogo>
+
+        {buscando && <Paleta onCerrar={cerrarBusqueda} />}
       </div>
     </div>
   );
@@ -376,7 +363,7 @@ function QuienEsta() {
   if (!usuario) return null;
 
   return (
-    <div className="mt-2 border-t border-black/[0.06] px-2.5 pt-3">
+    <div className="mt-2 border-t border-contraste/[0.06] px-2.5 pt-3">
       <p className="truncate text-base font-medium leading-5">{usuario.nombre}</p>
       <p className="text-micro text-tinta-tenue">
         {usuario.rol === "dueno" ? "Dueño" : "Atiende"}

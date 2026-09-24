@@ -452,7 +452,7 @@ function Pestanas({
         role="tablist"
         aria-label="Secciones de la configuración"
         onKeyDown={alTeclear}
-        className="grid grid-cols-2 gap-1 rounded-md bg-black/[0.045] p-1 sm:inline-flex"
+        className="grid grid-cols-2 gap-1 rounded-md bg-contraste/[0.045] p-1 sm:inline-flex"
       >
         {PESTANAS.map((p, i) => {
           const elegida = p.id === actual;

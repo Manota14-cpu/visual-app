@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Marco } from "@/components/marco";
 import {
   Area,
@@ -12,6 +12,7 @@ import {
   Dialogo,
   Etiqueta,
   Hoja,
+  Tecla,
   Vacio,
 } from "@/components/ui";
 import { Icono } from "@/components/iconos";
@@ -22,7 +23,7 @@ import { pitido, useLectorDeCodigos } from "@/lib/lector";
 import { api, ErrorApi } from "@/lib/api";
 import { cantidadEscrita, enteroEscrito, fechaHora, hora, importeRenglon, leerNumero, llevado, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
-import { ETIQUETA_PAGO, type Caja, type CajaResumen, type ItemCobro } from "@/lib/tipos";
+import { ETIQUETA_PAGO, type Caja, type CajaResumen, type ItemCobro, type ProductoBuscado } from "@/lib/tipos";
 import { BuscadorProductos, buscarPorCodigo } from "./buscador-productos";
 import { DialogoCobro } from "./dialogo-cobro";
 import { DialogoDevolucion } from "./dialogo-devolucion";
@@ -32,6 +33,10 @@ export default function PaginaCaja() {
   const avisos = useAvisos();
   const { datos: caja, cargando, error, recargar } = useDatos<Caja | null>("/caja");
   const { datos: historial, recargar: recargarHistorial } = useDatos<CajaResumen[]>("/caja/historial");
+  const { datos: frecuentes, recargar: recargarFrecuentes } = useDatos<ProductoBuscado[]>(
+    "/productos/frecuentes",
+    { silencioso: true }
+  );
 
   const { esDueno } = useSesion();
   const [items, setItems] = useState<ItemCobro[]>([]);
@@ -66,10 +71,25 @@ export default function PaginaCaja() {
   const sinStock = items.some((i) => i.productoId !== null && i.cantidad > i.stock);
   // Una cantidad vacía mientras se escribe: no se cobra hasta completarla.
   const sinCantidad = items.some((i) => i.cantidad <= 0);
+  const puedeCobrar = items.length > 0 && !sinStock && !sinCantidad;
+
+  // F2 abre el cobro desde cualquier lado de la pantalla, con el cursor en el
+  // buscador o sin él: es la tecla de "cobrar" de casi todas las cajas.
+  useEffect(() => {
+    if (!caja || !puedeCobrar) return;
+    const alTeclear = (evento: KeyboardEvent) => {
+      if (evento.key !== "F2" || document.querySelector("dialog[open]")) return;
+      evento.preventDefault();
+      setCobrando(true);
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [caja, puedeCobrar]);
 
   function actualizar() {
     void recargar();
     void recargarHistorial();
+    void recargarFrecuentes();
   }
 
   function agregar(producto: {
@@ -218,6 +238,10 @@ export default function PaginaCaja() {
 
                 <Lector lectura={lectura} esDueno={esDueno} />
 
+                {frecuentes && frecuentes.length > 0 && (
+                  <AUnToque productos={frecuentes} items={items} onElegir={agregar} />
+                )}
+
                 {items.length === 0 ? (
                   <Vacio
                     titulo="Sin renglones"
@@ -361,10 +385,11 @@ export default function PaginaCaja() {
                     <Boton
                       tono="principal"
                       icono="caja"
-                      disabled={items.length === 0 || sinStock || sinCantidad}
+                      disabled={!puedeCobrar}
                       onClick={() => setCobrando(true)}
                     >
                       Cobrar
+                      <Tecla clara>F2</Tecla>
                     </Boton>
                   </div>
                 </div>
@@ -515,6 +540,69 @@ export default function PaginaCaja() {
         />
       )}
     </Marco>
+  );
+}
+
+/**
+ * Lo que más se vende, a un toque.
+ *
+ * El pan, la bolsa, el cigarrillo suelto: lo que se pide diez veces por hora
+ * no debería necesitar el buscador, y muchas veces no tiene código de barras
+ * que pasar. Salen de las ventas del último mes, así que se acomodan solos a
+ * lo que se vende en cada negocio.
+ *
+ * El número azul dice cuánto ya hay en el carrito: tocar dos veces por error
+ * se ve enseguida, sin tener que bajar hasta la lista.
+ */
+function AUnToque({
+  productos,
+  items,
+  onElegir,
+}: {
+  productos: ProductoBuscado[];
+  items: ItemCobro[];
+  onElegir: (producto: ProductoBuscado) => void;
+}) {
+  return (
+    <div>
+      <p className="etiqueta-campo mb-2">A un toque</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {productos.map((producto) => {
+          const enCarrito = items.find((i) => i.productoId === producto.id);
+          const agotado = producto.stock <= 0;
+          return (
+            <button
+              key={producto.id}
+              type="button"
+              disabled={agotado}
+              onClick={() => onElegir(producto)}
+              title={producto.nombre}
+              className={cn(
+                // En el teléfono van cuatro: ocho botones empujaban el carrito
+                // fuera de la pantalla.
+                "group relative flex min-h-[58px] flex-col justify-between gap-1 rounded-md border px-3 py-2 text-left transition-all duration-200 ease-suave max-sm:[&:nth-child(n+5)]:hidden",
+                "active:scale-[0.97] disabled:opacity-45",
+                enCarrito
+                  ? "border-acento/30 bg-acento-suave"
+                  : "border-linea bg-lienzo/70 hover:border-acento/30 hover:bg-acento-suave/60"
+              )}
+            >
+              <span className="line-clamp-2 pr-5 text-chico font-medium leading-[17px] text-tinta">
+                {producto.nombre}
+              </span>
+              <span className="cifra text-micro text-tinta-suave">
+                {agotado ? "sin stock" : `${plata(producto.precio)}${producto.porPeso ? " el kilo" : ""}`}
+              </span>
+              {enCarrito && (
+                <span className="cifra absolute right-1.5 top-1.5 flex h-[18px] min-w-[18px] animate-entrar items-center justify-center rounded-full bg-acento px-1 text-[10.5px] font-semibold text-white shadow-acento">
+                  {producto.porPeso ? cantidadEscrita(enCarrito.cantidad, true) : numero(enCarrito.cantidad)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -698,7 +786,7 @@ function DialogoMovimiento({
                 "rounded border px-3 py-2.5 text-base transition-colors",
                 tipo === opcion
                   ? "border-transparent bg-acento text-white shadow-acento"
-                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-[#FAFAFC]"
+                  : "border-linea-fuerte/70 bg-papel text-tinta-media shadow-boton hover:bg-contraste/[0.025]"
               )}
             >
               {opcion === "retiro" ? "Sale del cajón" : "Entra al cajón"}

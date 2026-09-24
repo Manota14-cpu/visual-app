@@ -89,6 +89,7 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
         hoyVentas: {
           cantidad: ventasDeHoy.length,
           total: ventasDeHoy.reduce((s, p) => s + p.total, 0),
+          semanaPasada: vendidoHaceUnaSemana(d.pedidos, new Date()),
           unidades: contarRenglones(ventasDeHoy.flatMap((p) => p.items)).unidades,
           gramos: contarRenglones(ventasDeHoy.flatMap((p) => p.items)).gramos,
         },
@@ -169,6 +170,32 @@ export function rutasPanel(r: Ruteador, a: Almacen): void {
       };
     })
   );
+}
+
+/**
+ * Lo que se había vendido hace exactamente una semana, hasta esta misma hora.
+ *
+ * Contra "ayer" no se compara: un lunes y un domingo no se parecen en ningún
+ * negocio. Y contra el día entero tampoco: a las diez de la mañana cualquier
+ * día iría "un 80% abajo" de un día que ya terminó. El mismo día de la semana
+ * pasada, cortado a la misma hora, es la única comparación que dice algo a
+ * cualquier hora en que se mire el Panel.
+ */
+export function vendidoHaceUnaSemana(
+  pedidos: { estado: string; creadoEn: string; total: number }[],
+  ahora: Date
+): number {
+  const corte = new Date(ahora);
+  corte.setDate(corte.getDate() - 7);
+  const dia = diaLocal(corte);
+
+  return pedidos
+    .filter((p) => {
+      if (p.estado === "cancelado") return false;
+      const cuando = new Date(p.creadoEn);
+      return diaLocal(cuando) === dia && cuando.getTime() <= corte.getTime();
+    })
+    .reduce((s, p) => s + p.total, 0);
 }
 
 /**

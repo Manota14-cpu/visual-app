@@ -58,7 +58,7 @@ export function ColumnasPorDia({ datos }: { datos: { dia: string; total: number 
               </span>
             </span>
 
-            <span className="vidrio-menu pointer-events-none absolute -top-8 z-10 hidden whitespace-nowrap rounded px-2 py-1 text-chico font-medium shadow-elevada ring-1 ring-black/[0.06] group-hover:block">
+            <span className="vidrio-menu pointer-events-none absolute -top-8 z-10 hidden whitespace-nowrap rounded px-2 py-1 text-chico font-medium shadow-elevada ring-1 ring-contraste/[0.06] group-hover:block">
               {plata(punto.total)}
             </span>
           </div>
@@ -90,12 +90,12 @@ export function BarrasEtiquetadas({
               {fila.texto ?? formato(fila.valor)}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-black/[0.06]">
+          <div className="h-2 overflow-hidden rounded-full bg-contraste/[0.06]">
             <div
               className="h-full rounded-full transition-all duration-500 ease-suave"
               style={{
                 width: `${Math.max((fila.valor / maximo) * 100, 2)}%`,
-                background: fila.color ?? "#0050CE",
+                background: fila.color ?? "rgb(var(--acento))",
               }}
             />
           </div>
