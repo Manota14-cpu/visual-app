@@ -13,7 +13,11 @@
 # =====================================================================
 
 # Visual App es el programa; Visual Solution, la empresa que lo hace.
-appId: com.visualsolution.visualapp
+# El appId es la identidad del programa para Windows: con el mismo, una
+# versión nueva reemplaza a la anterior; con otro, se instala al lado. La
+# 3.0.0 se publicó como "Visual Solution" con este appId, y es el que quedó en
+# las computadoras: si cambia, actualizar deja dos programas instalados.
+appId: com.visualsolution.app
 productName: Visual App
 copyright: © Visual Solution
 

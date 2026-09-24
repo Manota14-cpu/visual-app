@@ -32,7 +32,7 @@ const RAIZ = path.join(__dirname, "..");
 // El AppUserModelID agrupa las ventanas en la barra de tareas y es el que usan
 // las notificaciones de Windows. Tiene que coincidir con el `appId` de
 // electron-builder.yml, que es el que queda en el acceso directo.
-app.setAppUserModelId("com.visualsolution.visualapp");
+app.setAppUserModelId("com.visualsolution.app");
 
 // Una sola copia abierta. Dos procesos escribiendo el mismo archivo de datos lo
 // dejarían con lo que guardó el último: un doble clic de más no puede costar
