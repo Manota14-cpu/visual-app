@@ -91,7 +91,6 @@ Al cerrar la ventana se cierra todo.
 | `npm run dev` | La aplicación de escritorio, en desarrollo |
 | `npm run build` | Compila la interfaz (`out/`) y el servidor (`compilado/`) |
 | `npm run dist` | Arma el instalador en `dist/` |
-| `npm run publicar` | Arma y publica en GitHub Releases (lo usa GitHub Actions) |
 | `npm run web` | Solo la interfaz, en el navegador (necesita `npm run servidor`) |
 | `npm run servidor` | Solo el servidor, sin ventana |
 | `npm run icono` | Regenera `build/icon.ico` desde el arte de la marca |
@@ -126,7 +125,10 @@ El instalador (NSIS, en español):
 
 La configuración está en [`electron-builder.yml`](electron-builder.yml). Lo que
 viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
-`electron-updater`: ni el código fuente, ni Next, ni React. Por eso `next`,
+`electron-updater`: ni el código fuente, ni Next, ni React. El servidor va en
+un solo archivo minificado y sin comentarios
+([`herramientas/servidor.mjs`](herramientas/servidor.mjs)): sin eso, el código
+de la API quedaba legible en la carpeta del programa instalado. Por eso `next`,
 `react` y compañía están en `devDependencies`: solo hacen falta para compilar.
 
 ## Publicar una versión
@@ -141,9 +143,10 @@ viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
    npm version 3.0.1 --no-git-tag-version
    ```
 
-   Y contar qué trae en `build/release-notes.md`: electron-builder lo pone
-   en la publicación de GitHub y el programa lo muestra en el aviso de
-   actualización, en *Configuración → Programa*.
+   Y contar qué trae en `build/release-notes.md`: va en la publicación de
+   GitHub y el programa lo muestra en el aviso de actualización, en
+   *Configuración → Programa*. Si no se cambia, el aviso muestra las novedades
+   de la versión anterior.
 
 2. Commit y etiqueta:
 
@@ -155,16 +158,40 @@ viaja adentro es la interfaz compilada, el servidor compilado, `electron/` y
 
 3. GitHub Actions ([`.github/workflows/publicar.yml`](.github/workflows/publicar.yml))
    comprueba que la etiqueta coincida con `package.json`, corre los tipos y las
-   pruebas, arma el instalador y crea la publicación con
-   `Visual-App-Setup.exe`, su `.blockmap` y `latest.yml` adjuntos.
+   pruebas, arma el instalador y crea la publicación en
+   [visual-app-descargas](https://github.com/Manota14-cpu/visual-app-descargas)
+   con `Visual-App-Setup.exe`, su `.blockmap` y `latest.yml` adjuntos.
 
-No hay que cargar ningún secreto para esto: el `GITHUB_TOKEN` lo crea GitHub en
-cada ejecución. Solo la firma de código (abajo) usa secretos, y es opcional.
+### Por qué las descargas van en otro repositorio
+
+El código vive en este repositorio, que puede ser privado. Las descargas van en
+`visual-app-descargas`, que es público y no tiene código: es de donde leen las
+actualizaciones los programas instalados (`publish` en `electron-builder.yml`).
+Si leyeran de un repositorio privado harían falta una clave de GitHub en cada
+computadora, y esa clave abriría el código.
+
+Publicar en otro repositorio necesita una clave con permiso para escribir ahí,
+porque el `GITHUB_TOKEN` de cada ejecución solo sirve para este. Se crea una
+sola vez, a mano:
+
+1. En GitHub: *Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens → Generate new token*. Repositorio: solo
+   `visual-app-descargas`. Permiso: *Contents: Read and write*.
+2. En este repositorio: *Settings → Secrets and variables → Actions → New
+   repository secret*, con el nombre `DESCARGAS_TOKEN` y la clave como valor.
+
+La clave vence (la fecha la elige quien la crea). Cuando vence, la publicación
+falla con un error que lo dice, y hay que crear otra y reemplazar el secreto.
+
+Mientras este repositorio sea público, cada versión se publica además acá: las
+computadoras con la 3.0.2 o anterior buscan las actualizaciones en este
+repositorio, y así pasan a una versión que ya mira `visual-app-descargas`.
+Cuando pase a privado, ese paso deja de correr solo.
 
 Para pasarle el programa a alguien nuevo, este enlace baja siempre la última
 versión:
 
-<https://github.com/Manota14-cpu/visual-app/releases/latest/download/Visual-App-Setup.exe>
+<https://github.com/Manota14-cpu/visual-app-descargas/releases/latest/download/Visual-App-Setup.exe>
 
 ## Que la versión nueva llegue sola
 

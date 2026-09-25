@@ -328,3 +328,45 @@ describe("el aumento de un proveedor", () => {
     expect(visto.proveedorId).toBeNull();
   });
 });
+
+// ─────────────────────────────  Celular como escáner  ─────────────────────────────
+
+describe("el celular como escáner de la caja", () => {
+  it("lo que manda el celular lo toma la computadora una sola vez", async () => {
+    const yerba = sembrar("Yerba 1kg", 4000);
+
+    const enviado = (await pedir("POST", "/caja/remoto", { productoId: yerba })) as { nombre: string; escuchando: boolean };
+    expect(enviado.nombre).toBe("Yerba 1kg");
+    // Nadie preguntó todavía: el celular avisa que la computadora no escucha.
+    expect(enviado.escuchando).toBe(false);
+
+    const tomados = (await pedir("POST", "/caja/remoto/tomar")) as { producto: { id: string; precio: number } }[];
+    expect(tomados).toHaveLength(1);
+    expect(tomados[0]!.producto).toMatchObject({ id: yerba, precio: 4000 });
+
+    // Dos cajas mirando no cobran dos veces lo mismo.
+    expect(await pedir("POST", "/caja/remoto/tomar")).toEqual([]);
+
+    // Ahora la computadora está escuchando.
+    const otro = (await pedir("POST", "/caja/remoto", { productoId: yerba })) as { escuchando: boolean };
+    expect(otro.escuchando).toBe(true);
+  });
+
+  it("lleva lo que trae el paquete de la balanza y el precio de ahora", async () => {
+    const jamon = sembrar("Jamón cocido", 18_990, { porPeso: true });
+    await pedir("POST", "/caja/remoto", { productoId: jamon, cantidad: 350 });
+    a.escribir((d) => {
+      d.productos.find((p) => p.id === jamon)!.precioVenta = 20_000;
+    });
+
+    const [tomado] = (await pedir("POST", "/caja/remoto/tomar")) as {
+      producto: { precio: number; balanza: { cantidad: number } };
+    }[];
+    expect(tomado!.producto.precio).toBe(20_000);
+    expect(tomado!.producto.balanza.cantidad).toBe(350);
+  });
+
+  it("rechaza un producto que no existe", async () => {
+    await expect(pedir("POST", "/caja/remoto", { productoId: "nada" })).rejects.toThrow(/no existe/);
+  });
+});

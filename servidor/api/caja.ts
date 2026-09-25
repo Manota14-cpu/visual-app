@@ -54,7 +54,95 @@ function costoDelDia(d: BaseDatos, productoId: string | null): number | null {
  * `almacen.escribir`: si al cuarto renglón no le alcanza el stock, los tres
  * primeros no quedan descontados y la venta no existe.
  */
+/**
+ * Lo que un celular escaneó para la caja de la computadora.
+ *
+ * El celular en modo escáner no arma su propio carrito: manda cada producto
+ * acá, y la caja de la computadora lo pasa a buscar cada segundo y lo suma al
+ * suyo. Vive en memoria y no en el archivo: es un pasamanos de segundos, no un
+ * dato del negocio, y si el programa se reinicia no hay nada que rescatar.
+ */
+interface Envio {
+  productoId: string;
+  /** Lo que trae el paquete, si vino de una etiqueta de balanza. */
+  cantidad: number | null;
+  /** Quién lo mandó, para que la computadora diga "del celular de Sofía". */
+  quien: string | null;
+  creadoEn: number;
+}
+
+/** Lo que nadie pasó a buscar en este tiempo ya no se agrega: sería de otra venta. */
+const VIDA_ENVIO_MS = 10 * 60_000;
+/** Si la computadora preguntó hace menos que esto, está escuchando. */
+const ESCUCHA_MS = 5_000;
+const MAX_ENVIOS = 200;
+
 export function rutasCaja(r: Ruteador, a: Almacen): void {
+  const envios: Envio[] = [];
+  let ultimaToma = 0;
+
+  const podar = () => {
+    const limite = Date.now() - VIDA_ENVIO_MS;
+    while (envios.length > 0 && envios[0]!.creadoEn < limite) envios.shift();
+  };
+
+  r.post("/caja/remoto", ({ cuerpo, usuario }) =>
+    a.leer((d) => {
+      const productoId = recortar(cuerpo.productoId as string, 64);
+      const producto = productoId ? d.productos.find((p) => p.id === productoId && p.activo) : undefined;
+      if (!producto) throw new Regla("Ese producto ya no existe.");
+
+      const cantidad = cuerpo.cantidad === null || cuerpo.cantidad === undefined ? null : entero(cuerpo.cantidad, 0);
+      if (cantidad !== null && (cantidad <= 0 || cantidad > 1_000_000)) throw new Regla("Esa cantidad no es válida.");
+
+      podar();
+      if (envios.length >= MAX_ENVIOS) {
+        throw new Regla("La computadora no está tomando lo que se manda. Abrí la caja en la computadora.");
+      }
+      envios.push({ productoId: producto.id, cantidad, quien: usuario?.nombre ?? null, creadoEn: Date.now() });
+
+      return {
+        nombre: producto.nombre,
+        // Para que el celular avise si nadie lo va a recibir.
+        escuchando: Date.now() - ultimaToma < ESCUCHA_MS,
+      };
+    })
+  );
+
+  /**
+   * La computadora se lleva lo que mandaron los celulares. Se saca de la cola
+   * al entregarlo: si hubiera dos cajas mirando, cada producto entra en una
+   * sola y no se cobra dos veces.
+   */
+  r.post("/caja/remoto/tomar", () =>
+    a.leer((d) => {
+      ultimaToma = Date.now();
+      podar();
+      return envios.splice(0).flatMap((envio) => {
+        const p = d.productos.find((x) => x.id === envio.productoId && x.activo);
+        if (!p) return [];
+        return [
+          {
+            quien: envio.quien,
+            producto: {
+              id: p.id,
+              nombre: p.nombre,
+              sku: p.sku,
+              codigoBarras: p.codigoBarras,
+              // El precio de ahora, no el de cuando se escaneó: es el que se
+              // va a cobrar y el que el servidor exige.
+              precio: p.precioVenta,
+              stock: p.stock,
+              unidadMedida: p.unidadMedida,
+              porPeso: p.porPeso,
+              balanza: envio.cantidad !== null ? { cantidad: envio.cantidad, importeEtiqueta: null } : undefined,
+            },
+          },
+        ];
+      });
+    })
+  );
+
   r.get("/caja", () =>
     a.leer((d) => {
       const caja = cajaAbierta(d);

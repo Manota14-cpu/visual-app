@@ -36,8 +36,9 @@ files:
   - out/**
   - "!**/*.map"
 
-# El servidor son módulos ES (`import`). Electron los carga igual desde
-# adentro del .asar, pero se dejan afuera para no depender de eso.
+# El servidor es un módulo ES (`import`). Electron lo carga igual desde
+# adentro del .asar, pero se deja afuera para no depender de eso. Es un solo
+# archivo minificado (herramientas/servidor.mjs), no el código fuente.
 asarUnpack:
   - compilado/**
 
@@ -73,10 +74,22 @@ nsis:
   # Pasos propios: retirar la Visual App de PowerShell (2.0.0 y anteriores).
   include: build/installer.nsh
 
+# Dónde buscan las actualizaciones los programas instalados. Va a parar a
+# resources/app-update.yml adentro del programa.
+#
+# Es un repositorio aparte, público y sin código: solo el instalador y
+# latest.yml. El código vive en visual-app, que puede ser privado sin que las
+# actualizaciones dejen de llegar. Hacer privado el repositorio del que leen
+# las actualizaciones las cortaría: electron-updater solo lee uno privado con
+# una clave de GitHub guardada en cada computadora, y esa clave abriría el código.
+#
+# electron-builder no sube nada (`--publish never`): la publicación la arma el
+# flujo de GitHub con `gh release create`, en un solo paso. Subiendo desde
+# electron-builder salían dos publicaciones con la misma versión, una con el
+# instalador y otra con el .blockmap, y las actualizaciones bajaban siempre el
+# instalador entero.
 publish:
   provider: github
   owner: Manota14-cpu
-  repo: visual-app
-  # Publicada directamente, no como borrador: electron-updater no ve los
-  # borradores, así que una versión en borrador no le llegaría a nadie.
+  repo: visual-app-descargas
   releaseType: release

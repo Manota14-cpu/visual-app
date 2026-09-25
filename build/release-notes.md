@@ -1,10 +1,9 @@
-Novedades de Visual App 3.0.1
+Novedades de Visual App 3.0.3 (y 3.0.2)
 
-- Caja: lo que más se vende, a un toque, sin buscarlo ni pasarlo por el lector.
-- Cobro más rápido: F2 abre el cobro, los billetes con que se suele pagar están a un toque y Enter cobra.
-- Buscador en todo el programa: Ctrl+K busca productos, clientes y secciones desde cualquier pantalla.
-- Tema oscuro: claro, oscuro o como Windows, abajo de la columna (en el celular, en "Más").
-- Panel: lo vendido hoy comparado con el mismo día de la semana pasada, a la misma hora.
-- Ventas: "Exportar a planilla" baja lo que se está viendo para abrirlo en Excel.
-- Clientes: "Recordarle por WhatsApp" abre el mensaje con el saldo ya escrito.
-- La hora se muestra de 0 a 23: 22:24 y no 10:24 p. m.
+- Celular como escáner: tildá "Mandar a la caja de la computadora" en la caja del celular y todo lo que escanees aparece en el carrito de la computadora.
+- Balanza: la caja lee las etiquetas que imprime la balanza, con el peso y el importe del paquete. Se configura en Configuración → Balanza.
+- Producto nuevo desde la caja: si escaneás algo que no está cargado, se busca el nombre en internet y se carga ahí mismo, con precio y stock.
+- Proveedores: cada producto puede tener su proveedor, y "Aumento" aplica el aumento de su lista a todos sus productos.
+- Empleados: el dueño decide si pueden hacer descuentos y anular ventas (arranca apagado). La pantalla se bloquea sola después de unos minutos sin uso.
+- Shampoos y sabores de la misma marca ya no se confunden al escanear.
+- Si una actualización no se pudo instalar, el programa lo avisa en vez de pedirla de nuevo.

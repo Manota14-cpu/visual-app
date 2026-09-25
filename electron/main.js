@@ -261,6 +261,11 @@ function crearVentana(direccion, oscura) {
       // El pitido del lector de códigos suena sin esperar un clic: la primera
       // lectura del día no puede quedar muda.
       autoplayPolicy: "no-user-gesture-required",
+      // Con la ventana tapada por otra, Chromium frena sus relojes. La caja
+      // pasa a buscar cada segundo lo que escanean los celulares, y el
+      // bloqueo por inactividad mira la hora: los dos tienen que seguir
+      // andando aunque la caja no esté adelante.
+      backgroundThrottling: false,
     },
   });
 
@@ -572,7 +577,7 @@ function prepararActualizaciones() {
       revisadaEn: new Date().toISOString(),
       error:
         fallida === info.version
-          ? `La última vez no se pudo instalar la versión ${fallida}. Probá de nuevo; si vuelve a pasar, bajá el instalador de https://github.com/Manota14-cpu/visual-app/releases/latest y ejecutalo con el programa cerrado.`
+          ? `La última vez no se pudo instalar la versión ${fallida}. Probá de nuevo; si vuelve a pasar, bajá el instalador de https://github.com/Manota14-cpu/visual-app-descargas/releases/latest y ejecutalo con el programa cerrado.`
           : null,
     });
   });

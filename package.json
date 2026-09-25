@@ -1,7 +1,7 @@
 {
   "name": "visual-app",
   "productName": "Visual App",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "private": true,
   "description": "Stock, caja y ventas para el negocio. Aplicación de escritorio para Windows.",
   "author": "Visual Solution (https://visual-solution.vercel.app)",
@@ -15,9 +15,8 @@
   "scripts": {
     "dev": "electron .",
     "build": "next build && npm run build:servidor",
-    "build:servidor": "tsc -p tsconfig.servidor.json && node -e \"require('fs').writeFileSync('compilado/servidor/package.json', JSON.stringify({ type: 'module' }))\"",
+    "build:servidor": "node herramientas/servidor.mjs",
     "dist": "npm run build && electron-builder --win --publish never",
-    "publicar": "npm run build && electron-builder --win --publish always",
     "web": "next dev",
     "servidor": "node --watch servidor/index.ts",
     "icono": "node herramientas/icono.mjs build/icon.ico",
@@ -39,6 +38,7 @@
     "clsx": "^2.1.1",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "next": "16.3.4",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Marco } from "@/components/marco";
 import {
   Area,
@@ -9,6 +9,7 @@ import {
   Boton,
   Campo,
   Cargando,
+  Casilla,
   Dialogo,
   Etiqueta,
   Hoja,
@@ -42,9 +43,27 @@ export default function PaginaCaja() {
   const { esDueno } = useSesion();
   const [items, setItems] = useState<ItemCobro[]>([]);
   // Lo último que leyó el lector, para el recuadro de abajo del buscador.
+  // `nota` dice de dónde vino o a dónde fue cuando no es de esta pantalla.
   const [lectura, setLectura] = useState<
-    { codigo: string; producto: string | null } | null
+    { codigo: string; producto: string | null; nota?: string } | null
   >(null);
+
+  // La computadora donde corre el programa recibe lo que escanean los
+  // celulares. Un celular puede ponerse en modo escáner: no arma carrito
+  // propio y cada producto que pasa aparece en el de la computadora, que es
+  // donde se cobra. Se decide por la dirección: la computadora entra por
+  // 127.0.0.1, un celular por la IP del wifi del local.
+  const [enLaComputadora] = useState(
+    () => typeof window === "undefined" || ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)
+  );
+  const [modoEscaner, setModoEscaner] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem("caja.modoEscaner") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const mandaALaComputadora = !enLaComputadora && modoEscaner;
   const [cobrando, setCobrando] = useState(false);
   const [devolviendo, setDevolviendo] = useState(false);
   // La caja que se está cerrando se guarda aparte, no se toma "en vivo": al
@@ -140,14 +159,77 @@ export default function PaginaCaja() {
    * aviso: antes la lectura se perdía sin ninguna señal y parecía que el lector
    * no andaba.
    */
+  /** Al carrito de acá, o al de la computadora si este celular es el escáner. */
+  function sumar(producto: Parameters<typeof agregar>[0], conPitido = false) {
+    if (mandaALaComputadora) {
+      void mandar(producto);
+      return;
+    }
+    agregar(producto);
+    if (conPitido) pitido("ok");
+  }
+
+  async function mandar(producto: Parameters<typeof agregar>[0]) {
+    try {
+      const r = await api.post<{ nombre: string; escuchando: boolean }>("/caja/remoto", {
+        productoId: producto.id,
+        cantidad: producto.balanza?.cantidad ?? null,
+      });
+      pitido("ok");
+      setLectura({ codigo: "", producto: r.nombre, nota: "mandado a la computadora" });
+      if (!r.escuchando) {
+        avisos.error("Se mandó, pero la computadora no tiene la caja abierta: va a aparecer cuando la abra.");
+      }
+    } catch (e) {
+      pitido("error");
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudo mandar a la computadora.");
+    }
+  }
+
+  // La computadora pasa a buscar cada segundo lo que mandaron los celulares.
+  // `agregar` va por una referencia: el reloj se arma una vez por turno.
+  const agregarRef = useRef(agregar);
+  useEffect(() => {
+    agregarRef.current = agregar;
+  });
+  const cajaId = caja?.id;
+  useEffect(() => {
+    if (!cajaId || !enLaComputadora) return;
+    let enCurso = false;
+    const reloj = setInterval(async () => {
+      if (enCurso) return;
+      enCurso = true;
+      try {
+        const llegados = await api.post<{ quien: string | null; producto: ProductoBuscado }[]>(
+          "/caja/remoto/tomar"
+        );
+        for (const llegado of llegados) agregarRef.current(llegado.producto);
+        const ultimo = llegados.at(-1);
+        if (ultimo) {
+          pitido("ok");
+          setLectura({
+            codigo: "",
+            producto: ultimo.producto.nombre,
+            nota: ultimo.quien ? `del celular de ${ultimo.quien}` : "del celular",
+          });
+        }
+      } catch {
+        // Sin sesión (la pantalla bloqueada) o sin programa: lo mandado
+        // espera en el servidor y entra en la próxima vuelta.
+      } finally {
+        enCurso = false;
+      }
+    }, 1000);
+    return () => clearInterval(reloj);
+  }, [cajaId, enLaComputadora]);
+
   function leido(
     codigo: string,
     producto: Parameters<typeof agregar>[0] | null,
     mensaje: string | null = null
   ) {
     if (producto) {
-      agregar(producto);
-      pitido("ok");
+      sumar(producto, true);
     } else {
       pitido("error");
       // Se carga ahí mismo, con el nombre buscado en la base mundial. Un
@@ -158,7 +240,9 @@ export default function PaginaCaja() {
       if (/^\d{8,14}$/.test(codigo) && !/^2\d{12}$/.test(codigo)) setNuevoCodigo(codigo);
       else avisos.error(mensaje ?? `No hay ningún producto con el código ${codigo}.`);
     }
-    setLectura({ codigo, producto: producto?.nombre ?? null });
+    // En modo escáner el recuadro lo actualiza `mandar`, cuando el servidor
+    // confirma que llegó.
+    if (!producto || !mandaALaComputadora) setLectura({ codigo, producto: producto?.nombre ?? null });
   }
 
   // El lector se escucha en toda la pantalla, no solo en el buscador: si el
@@ -242,12 +326,37 @@ export default function PaginaCaja() {
               </div>
             )}
 
-            <Hoja titulo="Cobrar">
+            <Hoja titulo={mandaALaComputadora ? "Escáner" : "Cobrar"}>
               <div className="flex flex-col gap-3">
+                {!enLaComputadora && (
+                  <Casilla
+                    className="rounded-md border border-linea bg-lienzo px-3 py-2.5"
+                    etiqueta={
+                      <>
+                        Mandar a la caja de la computadora
+                        <span className="block text-chico text-tinta-suave">
+                          Lo que escanees o elijas acá aparece en el carrito de la computadora, y se cobra
+                          allá.
+                        </span>
+                      </>
+                    }
+                    checked={modoEscaner}
+                    onChange={(e) => {
+                      const prender = e.target.checked;
+                      setModoEscaner(prender);
+                      try {
+                        localStorage.setItem("caja.modoEscaner", prender ? "1" : "0");
+                      } catch {
+                        // Sin almacenamiento solo se olvida la elección al recargar.
+                      }
+                    }}
+                  />
+                )}
+
                 <BuscadorProductos
                   autoFocus
                   onElegir={(producto, porCodigo) =>
-                    porCodigo ? leido(producto.codigoBarras ?? producto.sku ?? "", producto) : agregar(producto)
+                    porCodigo ? leido(producto.codigoBarras ?? producto.sku ?? "", producto) : sumar(producto)
                   }
                   onNoEncontrado={(codigo, mensaje) => leido(codigo, null, mensaje)}
                 />
@@ -255,10 +364,15 @@ export default function PaginaCaja() {
                 <Lector lectura={lectura} esDueno={esDueno} />
 
                 {frecuentes && frecuentes.length > 0 && (
-                  <AUnToque productos={frecuentes} items={items} onElegir={agregar} />
+                  <AUnToque productos={frecuentes} items={items} onElegir={(producto) => sumar(producto)} />
                 )}
 
-                {items.length === 0 ? (
+                {mandaALaComputadora ? (
+                  <Vacio
+                    titulo="Modo escáner"
+                    detalle="Cada producto que pases va directo al carrito de la computadora. Para cobrar desde este celular, destildá la casilla de arriba."
+                  />
+                ) : items.length === 0 ? (
                   <Vacio
                     titulo="Sin renglones"
                     detalle="Buscá el producto por nombre o pasá el lector de códigos."
@@ -387,7 +501,7 @@ export default function PaginaCaja() {
                   </Aviso>
                 )}
 
-                <div className="flex items-center justify-between gap-3 pt-1">
+                <div className={cn("flex items-center justify-between gap-3 pt-1", mandaALaComputadora && "hidden")}>
                   <div>
                     <span className="etiqueta-campo">Total</span>
                     <p className="cifra font-titulo text-cifra">{plata(total)}</p>
@@ -534,8 +648,10 @@ export default function PaginaCaja() {
               onCerrar={() => setNuevoCodigo(null)}
               onCreado={(producto) => {
                 setNuevoCodigo(null);
-                agregar(producto);
-                setLectura({ codigo: producto.codigoBarras ?? "", producto: producto.nombre });
+                sumar(producto);
+                if (!mandaALaComputadora) {
+                  setLectura({ codigo: producto.codigoBarras ?? "", producto: producto.nombre });
+                }
               }}
             />
           )}
@@ -854,7 +970,7 @@ function Lector({
   lectura,
   esDueno,
 }: {
-  lectura: { codigo: string; producto: string | null } | null;
+  lectura: { codigo: string; producto: string | null; nota?: string } | null;
   esDueno: boolean;
 }) {
   const noExiste = lectura !== null && lectura.producto === null;
@@ -884,6 +1000,7 @@ function Lector({
           <span className="text-tinta-media">
             Leído: <span className="font-medium text-tinta">{lectura.producto}</span>
             {lectura.codigo && <span className="cifra text-tinta-suave"> · {lectura.codigo}</span>}
+            {lectura.nota && <span className="text-tinta-suave"> · {lectura.nota}</span>}
           </span>
         ) : (
           <span className="text-alerta-texto">
