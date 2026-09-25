@@ -255,7 +255,57 @@ export interface Configuracion {
    * servidor lo exige y no se puede prender sin eso.
    */
   enRed: boolean;
+  /** Cómo leer las etiquetas que imprime la balanza del mostrador. */
+  balanza: ConfigBalanza;
+  /**
+   * Lo que el dueño les deja hacer a los empleados además de cobrar.
+   *
+   * Arranca todo apagado: un descuento o una venta anulada es plata que sale,
+   * y eso lo decide el dueño, no el que abre la caja.
+   */
+  empleados: PermisosEmpleados;
+  /**
+   * A los cuántos minutos sin tocar nada se bloquea la pantalla y pide la
+   * contraseña. Cero es nunca. Solo tiene efecto con usuarios creados.
+   */
+  bloqueoMinutos: number;
   creadaEn: Fecha;
+}
+
+/**
+ * La etiqueta de la balanza: un EAN-13 que empieza con 2.
+ *
+ * Los códigos que empiezan con 2 son de uso interno —ningún fabricante los
+ * tiene—, y las balanzas los usan para meter adentro el número de producto
+ * (PLU) y el importe o el peso del paquete:
+ *
+ *     20 01234 01550 7
+ *     │  │     │     └ dígito verificador
+ *     │  │     └ importe ($1.550) o peso (1.550 g)
+ *     │  └ PLU: el número del producto en la balanza
+ *     └ prefijo
+ *
+ * Cada marca de balanza reparte los dígitos a su manera, así que el largo del
+ * prefijo y del PLU se configuran; el valor ocupa lo que queda hasta el 12.
+ */
+export interface ConfigBalanza {
+  activa: boolean;
+  /** "2" o "20", "21"… Tiene que empezar con 2. */
+  prefijo: string;
+  /** Cuántos dígitos del PLU, después del prefijo. */
+  digitosPlu: number;
+  /** Qué trae el resto: el importe en pesos o el peso en gramos. */
+  contenido: "importe" | "peso";
+}
+
+export interface PermisosEmpleados {
+  /** Hacer descuentos al cobrar. */
+  descuentos: boolean;
+  /**
+   * Anular y reabrir ventas ya cobradas. Editarlas y borrarlas sigue siendo
+   * solo del dueño.
+   */
+  anularVentas: boolean;
 }
 
 // ───────────────────────────────  Catálogo  ───────────────────────────────
@@ -296,6 +346,11 @@ export interface Producto {
   /** Nunca se escribe directo: cambia solo por `ajustarStock`. */
   stock: number;
   stockMinimo: number;
+  /**
+   * A quién se le compra. Sirve para aplicar el aumento de su lista solo a
+   * sus productos. Null si nadie lo cargó.
+   */
+  proveedorId: string | null;
   /** Eliminar es reversible: se apaga esto y el producto se recupera. */
   activo: boolean;
   creadoEn: Fecha;

@@ -13,6 +13,7 @@ import type { Sistema } from "@/lib/tipos";
 import { TarjetaActualizaciones } from "@/components/actualizacion";
 import { Usuarios } from "./usuarios";
 import { AccesoDesdeElCelular } from "./red";
+import { Balanza, PermisosYBloqueo } from "./mostrador";
 
 /**
  * Las pestañas.
@@ -170,12 +171,19 @@ export default function PaginaConfiguracion() {
             {pestana === "negocio" && (
               <>
                 <FormularioNegocio config={datos.config} onGuardado={() => void recargar()} />
+                <Balanza config={datos.config.balanza} onGuardado={() => void recargar()} />
               </>
             )}
 
             {pestana === "usuarios" && (
               <>
                 <Usuarios />
+
+                <PermisosYBloqueo
+                  empleados={datos.config.empleados}
+                  bloqueoMinutos={datos.config.bloqueoMinutos}
+                  onGuardado={() => void recargar()}
+                />
 
                 <AccesoDesdeElCelular />
               </>

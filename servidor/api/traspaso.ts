@@ -134,6 +134,7 @@ export function rutasTraspaso(r: Ruteador, a: Almacen): void {
             cantidadMayoristaMin: null,
             stock: 0,
             stockMinimo: 0,
+            proveedorId: null,
             activo: true,
             creadoEn: ahora,
             actualizadoEn: ahora,

@@ -160,6 +160,16 @@ export function rutasPedidos(r: Ruteador, a: Almacen): void {
       if (!ESTADOS_PEDIDO.includes(estado)) throw new Regla("Ese estado no existe.");
       if (pedido.estado === estado) return vista(d, pedido, esDueno(usuario));
 
+      // Anular una venta devuelve plata y mercadería: un empleado lo hace solo
+      // si el dueño se lo habilitó. Los otros cambios de estado —un pedido que
+      // se entregó— siguen siendo de cualquiera.
+      const anula = estado === "cancelado" || pedido.estado === "cancelado";
+      if (anula && !esDueno(usuario) && !d.config.empleados.anularVentas) {
+        throw new Regla(
+          "Anular o reabrir una venta lo hace el dueño. Puede habilitarlo para los empleados en Configuración."
+        );
+      }
+
       // Cancelar una venta la saca de los totales de su turno, y con eso cambia
       // el arqueo de un cierre que ya se firmó: el mismo turno pasaría a mostrar
       // una diferencia que nadie contó. Es la misma regla que impide editarla o

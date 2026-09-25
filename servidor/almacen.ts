@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { BaseDatos } from "./tipos.ts";
+import type { BaseDatos, ConfigBalanza } from "./tipos.ts";
 
 /**
  * Un error de negocio, con un mensaje escrito para quien está usando la app.
@@ -561,6 +561,13 @@ function normalizar(d: BaseDatos): BaseDatos {
   // Una base anterior a esto nunca dio permiso para salir a la red. Apagado.
   d.config.enRed ??= false;
 
+  // La balanza, los permisos de los empleados y el bloqueo llegaron después.
+  // Los permisos arrancan apagados: lo que antes podía cualquiera ahora lo
+  // habilita el dueño, que es quien pidió poder decidirlo.
+  d.config.balanza ??= balanzaInicial();
+  d.config.empleados ??= { descuentos: false, anularVentas: false };
+  d.config.bloqueoMinutos ??= 10;
+
   // Y una anterior a que hubiera usuarios arranca sin ninguno, que es
   // exactamente lo que corresponde: el negocio que ya la venía usando sigue
   // entrando sin contraseña hasta que decida crear el primero.
@@ -602,12 +609,26 @@ function normalizar(d: BaseDatos): BaseDatos {
   // Antes no existía la venta por peso: todo lo cargado hasta ahora es por
   // unidad. Se escribe explícito en vez de dejarlo indefinido, para que el
   // resto del programa no tenga que preguntarse si el campo está.
-  for (const p of d.productos) p.porPeso ??= false;
+  for (const p of d.productos) {
+    p.porPeso ??= false;
+    // Antes los productos no sabían a quién se le compraban.
+    p.proveedorId ??= null;
+  }
   for (const pedido of d.pedidos) {
     for (const item of pedido.items) item.porPeso ??= false;
   }
 
   return d;
+}
+
+/**
+ * El formato más común en las balanzas de mostrador: "20", cinco dígitos de
+ * PLU y cinco de importe. Prendida: solo se usa con códigos que empiezan con
+ * el prefijo y que no están cargados como producto, así que no molesta a
+ * quien no tiene balanza.
+ */
+export function balanzaInicial(): ConfigBalanza {
+  return { activa: true, prefijo: "20", digitosPlu: 5, contenido: "importe" };
 }
 
 /** Una base vacía, con una categoría para poder cargar el primer producto. */
@@ -616,7 +637,16 @@ export function inicial(): BaseDatos {
 
   return {
     version: 1,
-    config: { negocio: "Mi negocio", detalle: null, resguardo: null, enRed: false, creadaEn: ahora },
+    config: {
+      negocio: "Mi negocio",
+      detalle: null,
+      resguardo: null,
+      enRed: false,
+      balanza: balanzaInicial(),
+      empleados: { descuentos: false, anularVentas: false },
+      bloqueoMinutos: 10,
+      creadaEn: ahora,
+    },
     categorias: [{ id: nuevoId(), nombre: "General", color: "#98989D", creadaEn: ahora }],
     productos: [],
     movimientos: [],

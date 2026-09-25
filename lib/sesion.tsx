@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, ErrorApi } from "@/lib/api";
-import type { Rol, UsuarioSesion } from "@/lib/tipos";
+import type { PermisosEmpleados, Rol, UsuarioSesion } from "@/lib/tipos";
 
 /**
  * Quién tiene la aplicación abierta.
@@ -22,6 +22,10 @@ interface Estado {
   cargando: boolean;
   /** Atajo: sin usuarios cargados, todo el mundo puede todo. */
   esDueno: boolean;
+  /** A los cuántos minutos sin uso se bloquea. Cero es nunca. */
+  bloqueoMinutos: number;
+  /** Lo que el dueño habilitó. Al dueño todo le da verdadero. */
+  puede: (permiso: keyof PermisosEmpleados) => boolean;
   refrescar: () => Promise<void>;
   salir: () => Promise<void>;
 }
@@ -32,14 +36,18 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
   const [exigeIngreso, setExigeIngreso] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [ajustes, setAjustes] = useState<{ bloqueoMinutos: number; empleados: PermisosEmpleados } | null>(null);
 
   const refrescar = useCallback(async () => {
     try {
-      const r = await api.get<{ exigeIngreso: boolean; usuario: UsuarioSesion | null }>(
-        "/usuarios/yo"
-      );
+      const r = await api.get<{
+        exigeIngreso: boolean;
+        usuario: UsuarioSesion | null;
+        ajustes: { bloqueoMinutos: number; empleados: PermisosEmpleados } | null;
+      }>("/usuarios/yo");
       setUsuario(r.usuario);
       setExigeIngreso(r.exigeIngreso);
+      setAjustes(r.ajustes ?? null);
     } catch {
       // Si el programa no contesta, no hay nada que decidir: la pantalla ya
       // muestra su propio error de "no se puede hablar con el programa".
@@ -72,15 +80,19 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     window.location.href = "/ingresar";
   }, []);
 
+  // Sin usuarios cargados la aplicación funciona como siempre: todo
+  // visible, como antes de que esto existiera.
+  const esDueno = !exigeIngreso || usuario?.rol === "dueno";
+
   return (
     <Contexto.Provider
       value={{
         usuario,
         exigeIngreso,
         cargando,
-        // Sin usuarios cargados la aplicación funciona como siempre: todo
-        // visible, como antes de que esto existiera.
-        esDueno: !exigeIngreso || usuario?.rol === "dueno",
+        esDueno,
+        bloqueoMinutos: ajustes?.bloqueoMinutos ?? 0,
+        puede: (permiso) => esDueno || ajustes?.empleados[permiso] === true,
         refrescar,
         salir,
       }}

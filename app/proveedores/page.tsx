@@ -23,6 +23,7 @@ import type { Pagina, Proveedor } from "@/lib/tipos";
 import { DialogoProveedor } from "./dialogo-proveedor";
 import { DialogoCuentaProveedor } from "./dialogo-cuenta";
 import { DialogoCompra } from "./dialogo-compra";
+import { DialogoPrecios } from "../productos/dialogo-precios";
 
 /**
  * A quién le compra el negocio y cuánto le debe.
@@ -52,6 +53,23 @@ export default function PaginaProveedores() {
   // "nueva" es cargar una compra sin haber elegido proveedor todavía; un
   // proveedor concreto es cargarle una a ese. Null es que no hay nada abierto.
   const [comprando, setComprando] = useState<Proveedor | "nueva" | null>(null);
+  // El aumento de la lista de un proveedor: sus productos, todos juntos.
+  const [aumentando, setAumentando] = useState<{ proveedor: Proveedor; ids: string[] } | null>(null);
+
+  async function aumento(p: Proveedor) {
+    try {
+      const suyos = await api.get<{ id: string }[]>(`/proveedores/${p.id}/productos`);
+      if (suyos.length === 0) {
+        avisos.error(
+          `${p.nombre} no tiene productos asignados. En Productos, filtrá «Sin proveedor», elegí los suyos y usá «Asignar proveedor».`
+        );
+        return;
+      }
+      setAumentando({ proveedor: p, ids: suyos.map((x) => x.id) });
+    } catch (e) {
+      avisos.error(e instanceof ErrorApi ? e.message : "No se pudieron traer sus productos.");
+    }
+  }
 
   async function restaurar(p: Proveedor) {
     try {
@@ -135,14 +153,15 @@ export default function PaginaProveedores() {
 
         {datos && datos.items.length > 0 && (
           <div className="hoja p-0">
-            <Tabla className="min-w-[720px]">
+            <Tabla className="min-w-[800px]">
               <EncabezadoTabla>
                 <tr>
                   <th>Proveedor</th>
                   <th>Última compra</th>
+                  <th className="text-right">Productos</th>
                   <th className="text-right">Compras</th>
                   <th className="text-right">Debés</th>
-                  <th className="w-56" />
+                  <th className="w-72" />
                 </tr>
               </EncabezadoTabla>
               <CuerpoTabla>
@@ -167,6 +186,7 @@ export default function PaginaProveedores() {
                         ? `${dia(p.ultimaCompra)} · ${hace(comoDiaLocal(p.ultimaCompra))}`
                         : "—"}
                     </td>
+                    <td className="cifra text-right text-tinta-suave">{p.productos ? numero(p.productos) : "—"}</td>
                     <td className="cifra text-right text-tinta-suave">{numero(p.compras)}</td>
                     <td
                       className={cn(
@@ -182,6 +202,13 @@ export default function PaginaProveedores() {
                           <>
                             <Boton chico onClick={() => setComprando(p)}>
                               Compra
+                            </Boton>
+                            <Boton
+                              chico
+                              onClick={() => void aumento(p)}
+                              title="Aplicar el aumento de su lista a todos sus productos"
+                            >
+                              Aumento
                             </Boton>
                             <Boton chico icono="editar" onClick={() => setEditando(p)}>
                               Editar
@@ -235,6 +262,17 @@ export default function PaginaProveedores() {
           proveedor={mirando}
           onCerrar={() => setMirando(null)}
           onCambio={() => void recargar()}
+        />
+      )}
+
+      {aumentando && (
+        <DialogoPrecios
+          abierto
+          ids={aumentando.ids}
+          titulo={`Aumento de ${aumentando.proveedor.nombre}`}
+          motivoInicial={`Aumento de lista de ${aumentando.proveedor.nombre}`}
+          onCerrar={() => setAumentando(null)}
+          onAplicado={() => void recargar()}
         />
       )}
 

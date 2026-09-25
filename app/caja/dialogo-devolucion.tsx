@@ -115,7 +115,9 @@ export function DialogoDevolucion({
         <BuscadorProductos
           autoFocus
           placeholder="Qué producto vuelve"
-          onNoEncontrado={(codigo) => avisos.error(`No hay ningún producto con el código ${codigo}.`)}
+          onNoEncontrado={(codigo, mensaje) =>
+            avisos.error(mensaje ?? `No hay ningún producto con el código ${codigo}.`)
+          }
           onElegir={(producto) =>
             setItems((previos) => {
               // Lo que vuelve de un producto por peso se cuenta en gramos, así

@@ -101,6 +101,7 @@ function sembrarProducto(nombre: string, venta: number, costo: number): string {
       cantidadMayoristaMin: null,
       stock: 10,
       stockMinimo: 0,
+      proveedorId: null,
       activo: true,
       creadoEn: ahora,
       actualizadoEn: ahora,
@@ -585,5 +586,53 @@ describe("dos personas no pueden tener el mismo usuario", () => {
     await expect(
       pedir("POST", "/usuarios", { nombre: "Otro", usuario: "JOACO", clave: "1234", rol: "empleado" }, dueno)
     ).rejects.toThrow(/ya hay alguien/i);
+  });
+});
+
+describe("el alta desde la caja", () => {
+  let dueno: string;
+  let empleado: string;
+
+  beforeEach(async () => {
+    dueno = await primerDueno();
+    empleado = await unEmpleado(dueno);
+  });
+
+  it("la puede hacer un empleado, sin poner ni ver el costo", async () => {
+    const creado = (await pedir(
+      "POST",
+      "/productos/desde-caja",
+      { nombre: "Shampoo Coco", codigoBarras: "7791293000028", precioVenta: 3500, precioCosto: 2000, stock: 6 },
+      empleado
+    )) as { id: string; precioCosto: number | null; stock: number };
+
+    expect(creado.precioCosto).toBeNull();
+    expect(creado.stock).toBe(6);
+    const guardado = a.leer((d) => d.productos.find((p) => p.id === creado.id)!);
+    expect(guardado.codigoBarras).toBe("7791293000028");
+    expect(guardado.precioCosto).toBeNull();
+  });
+
+  it("el dueño sí pone el costo", async () => {
+    const creado = (await pedir(
+      "POST",
+      "/productos/desde-caja",
+      { nombre: "Shampoo Manzana", codigoBarras: "7791293000011", precioVenta: 3500, precioCosto: 2000 },
+      dueno
+    )) as { precioCosto: number | null; stock: number };
+
+    expect(creado.precioCosto).toBe(2000);
+    // Sin stock escrito queda uno: el que se está vendiendo.
+    expect(creado.stock).toBe(1);
+  });
+
+  it("no acepta un código repetido, uno inválido ni un precio en cero", async () => {
+    const alta = (cuerpo: Record<string, unknown>) =>
+      pedir("POST", "/productos/desde-caja", { nombre: "X", precioVenta: 100, ...cuerpo }, empleado);
+
+    await alta({ codigoBarras: "7791293000035" });
+    await expect(alta({ codigoBarras: "7791293000035" })).rejects.toThrow(/ya está cargado/i);
+    await expect(alta({ codigoBarras: "abc" })).rejects.toThrow(/no es válido/i);
+    await expect(alta({ codigoBarras: "7791293000042", precioVenta: 0 })).rejects.toThrow(/precio/i);
   });
 });

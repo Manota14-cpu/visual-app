@@ -85,6 +85,23 @@ export function rutasProveedores(r: Ruteador, a: Almacen): void {
   );
 
   /**
+   * Lo que se le compra a este proveedor, para aplicarle el aumento de su
+   * lista de una vez. Sin paginar: son los ids que van al ajuste de precios.
+   */
+  r.get(
+    "/proveedores/:id/productos",
+    ({ params }) =>
+      a.leer((d) => {
+        if (!d.proveedores.some((p) => p.id === params.id)) return noEncontrado("Ese proveedor ya no existe.");
+        return d.productos
+          .filter((p) => p.activo && p.proveedorId === params.id)
+          .sort((x, y) => x.nombre.localeCompare(y.nombre, "es"))
+          .map((p) => ({ id: p.id, nombre: p.nombre, precioVenta: p.precioVenta }));
+      }),
+    "dueno"
+  );
+
+  /**
    * El resumen de cuenta: qué se compró, qué se pagó y cuánto queda.
    *
    * Todo en una sola lista ordenada por fecha, no dos listas separadas. Una
@@ -388,6 +405,7 @@ function vista(d: BaseDatos, p: Proveedor) {
     activo: p.activo,
     deuda: deudaProveedor(d, p.id),
     compras: compras.length,
+    productos: d.productos.filter((x) => x.activo && x.proveedorId === p.id).length,
     // Hace cuánto que no se le compra: sirve para ver quién quedó en el
     // camino y quién es el proveedor de todas las semanas.
     ultimaCompra: compras.map((c) => c.fecha).sort().at(-1) ?? null,

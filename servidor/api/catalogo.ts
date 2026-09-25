@@ -1,6 +1,8 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
 import { esDueno } from "../usuarios.ts";
+import { buscarCodigoMundial, nombreSugerido } from "../codigos-mundiales.ts";
+import { cantidadDeEtiqueta, leerEtiqueta, productoDelPlu } from "../balanza.ts";
 import {
   ajustarStock,
   contiene,
@@ -181,6 +183,11 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
       const categoria = consulta.get("categoria");
       if (categoria) productos = productos.filter((p) => p.categoriaId === categoria);
 
+      // "ninguno" son los que todavía no tienen proveedor: los que faltan asignar.
+      const proveedor = consulta.get("proveedor");
+      if (proveedor === "ninguno") productos = productos.filter((p) => !p.proveedorId);
+      else if (proveedor) productos = productos.filter((p) => p.proveedorId === proveedor);
+
       const q = consulta.get("q");
       if (q) {
         const termino = normalizar(q);
@@ -265,9 +272,85 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
           p.activo &&
           (p.codigoBarras?.toLowerCase() === codigo || p.sku?.toLowerCase() === codigo)
       );
-      return producto
-        ? vista(d, producto, esDueno(usuario))
-        : noEncontrado("Ningún producto tiene ese código.");
+      if (producto) return vista(d, producto, esDueno(usuario));
+
+      // Lo que no está cargado puede ser una etiqueta de la balanza: trae
+      // adentro el número del producto y el importe o el peso del paquete.
+      // Va después de la búsqueda exacta, así un código interno que empiece
+      // con 2 y esté cargado tal cual nunca se confunde con una etiqueta.
+      const etiqueta = leerEtiqueta(codigo, d.config.balanza);
+      if (etiqueta) {
+        const delPlu = productoDelPlu(d, etiqueta.plu);
+        if (!delPlu) {
+          return noEncontrado(
+            `Etiqueta de balanza con el producto ${etiqueta.plu}, que no está cargado. Poné ${etiqueta.plu} como código interno del producto.`
+          );
+        }
+        return {
+          ...vista(d, delPlu, esDueno(usuario)),
+          balanza: cantidadDeEtiqueta(delPlu, etiqueta, d.config.balanza),
+        };
+      }
+
+      return noEncontrado("Ningún producto tiene ese código.");
+    })
+  );
+
+  // Lo que no está cargado se busca en la base mundial, para darlo de alta
+  // desde la caja sin tipear el nombre.
+  r.get("/productos/mundial/:codigo", async ({ params }) => {
+    const codigo = params.codigo!.trim();
+    const encontrado = await buscarCodigoMundial(codigo);
+    return encontrado
+      ? { encontrado: true, nombre: nombreSugerido(encontrado), fuente: encontrado.fuente }
+      : { encontrado: false, nombre: null, fuente: null };
+  });
+
+  // El alta desde la caja: un producto escaneado que no estaba cargado. La
+  // puede hacer cualquiera que atienda —el cliente está esperando—, pero solo
+  // con lo que hace falta para venderlo: nombre, código, precio y stock. El
+  // costo lo pone únicamente el dueño; lo demás se completa en Productos.
+  r.post("/productos/desde-caja", ({ cuerpo, usuario }) =>
+    a.escribir((d) => {
+      const codigo = String(cuerpo.codigoBarras ?? "").trim();
+      if (!/^\d{8,14}$/.test(codigo)) throw new Regla("Ese código de barras no es válido.");
+
+      const ahora = new Date().toISOString();
+      const producto: Producto = {
+        id: nuevoId(),
+        categoriaId: null,
+        nombre: "",
+        descripcion: null,
+        sku: null,
+        codigoBarras: null,
+        unidadMedida: "unidad",
+        porPeso: false,
+        precioCosto: null,
+        precioVenta: 0,
+        precioMayorista: null,
+        cantidadMayoristaMin: null,
+        stock: 0,
+        stockMinimo: 0,
+        proveedorId: null,
+        activo: true,
+        creadoEn: ahora,
+        actualizadoEn: ahora,
+      };
+
+      aplicarFormulario(d, producto, {
+        nombre: cuerpo.nombre,
+        codigoBarras: codigo,
+        precioVenta: cuerpo.precioVenta,
+        precioCosto: esDueno(usuario) ? cuerpo.precioCosto : 0,
+      });
+      if (producto.precioVenta <= 0) throw new Regla("Escribí el precio de venta.");
+      d.productos.push(producto);
+
+      // Al menos uno: es el que se está vendiendo en este momento.
+      const inicial = Math.max(entero(cuerpo.stock, 1), 1);
+      ajustarStock(d, producto.id, inicial, "Carga inicial desde la caja", "creacion", usuario);
+
+      return vista(d, producto, esDueno(usuario));
     })
   );
 
@@ -304,6 +387,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         cantidadMayoristaMin: null,
         stock: 0,
         stockMinimo: 0,
+        proveedorId: null,
         activo: true,
         creadoEn: ahora,
         actualizadoEn: ahora,
@@ -451,6 +535,7 @@ export function rutasCatalogo(r: Ruteador, a: Almacen): void {
         if (!producto) continue;
 
         if (categoriaId) producto.categoriaId = categoriaId;
+        if ("proveedorId" in cuerpo) producto.proveedorId = proveedorValido(d, cuerpo.proveedorId);
         if (typeof cuerpo.activo === "boolean") producto.activo = cuerpo.activo;
         producto.actualizadoEn = new Date().toISOString();
         cambiados++;
@@ -607,6 +692,9 @@ export function vista(d: BaseDatos, p: Producto, verCostos = true) {
     cantidadMayoristaMin: p.cantidadMayoristaMin,
     stock: p.stock,
     stockMinimo: p.stockMinimo,
+    // A quién se le compra es del negocio, como el costo.
+    proveedorId: verCostos ? p.proveedorId : null,
+    proveedor: verCostos && p.proveedorId ? (d.proveedores.find((x) => x.id === p.proveedorId)?.nombre ?? null) : null,
     activo: p.activo,
     margen: verCostos ? margenSobreVenta(p.precioVenta, p.precioCosto) : null,
     margenCosto: verCostos ? margenSobreCosto(p.precioVenta, p.precioCosto) : null,
@@ -698,7 +786,19 @@ export function aplicarFormulario(d: BaseDatos, producto: Producto, cuerpo: Reco
   if (minimo < 0) throw new Regla("El stock mínimo no puede ser negativo.");
   producto.stockMinimo = minimo;
 
+  // Solo si viene: la importación y el alta desde la caja no lo mandan, y no
+  // tienen por qué borrar el proveedor que ya tenía.
+  if ("proveedorId" in cuerpo) producto.proveedorId = proveedorValido(d, cuerpo.proveedorId);
+
   producto.actualizadoEn = new Date().toISOString();
+}
+
+/** Un proveedor que existe, o null. Vacío es "sin proveedor". */
+function proveedorValido(d: BaseDatos, valor: unknown): string | null {
+  const id = recortar(valor as string, 64);
+  if (!id) return null;
+  if (!d.proveedores.some((p) => p.id === id)) throw new Regla("Ese proveedor ya no existe.");
+  return id;
 }
 
 interface FilaPrecio {
@@ -720,7 +820,7 @@ function previsualizar(d: BaseDatos, cuerpo: Record<string, unknown>): FilaPreci
   if (porcentaje < -90) throw new Regla("No se puede bajar más del 90%.");
   if (porcentaje > 500) throw new Regla("No se puede subir más del 500%.");
 
-  const redondeo = [1, 10, 50, 100].includes(Number(cuerpo.redondeo)) ? Number(cuerpo.redondeo) : 1;
+  const redondeo = [1, 10, 50, 100, 500, 1000].includes(Number(cuerpo.redondeo)) ? Number(cuerpo.redondeo) : 1;
   const aplicarA =
     cuerpo.aplicarA === "costo" || cuerpo.aplicarA === "ambos" ? cuerpo.aplicarA : "venta";
 

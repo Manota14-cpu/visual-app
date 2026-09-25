@@ -1,5 +1,5 @@
 import { nuevoId, Regla, type Almacen } from "../almacen.ts";
-import { selloDe } from "../usuarios.ts";
+import { esDueno, selloDe } from "../usuarios.ts";
 import { noEncontrado, type Ruteador } from "../http.ts";
 import {
   ajustarStock,
@@ -161,11 +161,31 @@ export function rutasCaja(r: Ruteador, a: Almacen): void {
         0
       );
 
+      // Sin el permiso del dueño, un empleado cobra el precio de lista: ni
+      // descuento ni un precio distinto en el renglón. La pantalla no ofrece
+      // cambiarlo, pero el pedido se puede armar a mano; esto es lo que de
+      // verdad lo impide.
+      const conPermiso = esDueno(usuario) || d.config.empleados.descuentos;
+      if (!conPermiso) {
+        for (const item of items) {
+          const producto = item.productoId ? d.productos.find((p) => p.id === item.productoId) : undefined;
+          if (!producto) throw new Regla(`"${item.nombre}" no está en Productos: ese renglón lo cobra el dueño.`);
+          if (item.precio !== producto.precioVenta) {
+            throw new Regla(
+              `El precio de ${producto.nombre} cambió mientras estaba en el carrito. Sacalo y volvelo a agregar.`
+            );
+          }
+        }
+      }
+
       // El descuento se guarda aparte del precio de los renglones. Bajando el
       // precio la venta cierra igual, pero se pierde el dato de que hubo
       // descuento: después no se puede saber cuánta plata se regaló.
       const descuento = entero(cuerpo.descuento, 0);
       if (descuento < 0) throw new Regla("El descuento no puede ser negativo.");
+      if (descuento > 0 && !conPermiso) {
+        throw new Regla("Los descuentos los hace el dueño. Puede habilitarlos para los empleados en Configuración.");
+      }
       if (descuento > subtotal) {
         throw new Regla("El descuento no puede ser mayor que la venta.");
       }

@@ -5,6 +5,7 @@ import { Area, Boton, Campo, Dialogo, Etiqueta, Tecla } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
+import { useSesion } from "@/lib/sesion";
 import { SelectorCliente, type ClienteElegido } from "@/components/selector-cliente";
 import { billetesSugeridos, importeRenglon, leerNumero, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,8 @@ export function DialogoCobro({
   }) => void;
 }) {
   const avisos = useAvisos();
+  // Sin el permiso del dueño el campo no aparece: el servidor lo rechazaría.
+  const puedeDescontar = useSesion().puede("descuentos");
   const subtotal = items.reduce(
     (suma, item) => suma + importeRenglon(item.precio, item.cantidad, item.porPeso),
     0
@@ -256,7 +259,7 @@ export function DialogoCobro({
       abierto={abierto}
       onCerrar={onCerrar}
       titulo="Cobrar"
-      descripcion={`${numero(items.length)} ${items.length === 1 ? "renglón" : "renglones"} · ${numero(items.reduce((s, i) => s + i.cantidad, 0))} unidades`}
+      descripcion={descripcionDe(items)}
       pie={
         <>
           <Boton onClick={onCerrar} disabled={cobrando}>
@@ -302,36 +305,37 @@ export function DialogoCobro({
         {/* El descuento en pesos o en porcentaje, lo que salga más rápido.
             Va acá arriba y no escondido: es una decisión que se toma con el
             cliente enfrente, antes de elegir cómo paga. */}
-        <div className="flex flex-wrap items-end gap-2">
-          <span className="min-w-[160px] flex-1">
-            <Campo
-              etiqueta="Descuento"
-              inputMode="numeric"
-              value={descuentoTexto}
-              onChange={(e) => {
-                setDescuentoTexto(e.target.value);
-                ajustarAlTotal(subtotal - descuentoDe(e.target.value, enPorcentaje));
-              }}
-              placeholder={enPorcentaje ? "10" : "500"}
-            />
-          </span>
-          <div className="flex overflow-hidden rounded border border-linea-fuerte">
-            {[
-              { valor: false, texto: "$" },
-              { valor: true, texto: "%" },
-            ].map((opcion) => (
-              <button
-                key={opcion.texto}
-                type="button"
-                onClick={() => {
-                  setEnPorcentaje(opcion.valor);
-                  ajustarAlTotal(subtotal - descuentoDe(descuentoTexto, opcion.valor));
+        {puedeDescontar && (
+          <div className="flex flex-wrap items-end gap-2">
+            <span className="min-w-[160px] flex-1">
+              <Campo
+                etiqueta="Descuento"
+                inputMode="numeric"
+                value={descuentoTexto}
+                onChange={(e) => {
+                  setDescuentoTexto(e.target.value);
+                  ajustarAlTotal(subtotal - descuentoDe(e.target.value, enPorcentaje));
                 }}
-                className={cn(
-                  "px-3 py-2 text-base transition-colors",
-                  enPorcentaje === opcion.valor
-                    ? "bg-acento text-white"
-                    : "text-tinta-suave hover:bg-contraste/[0.04]"
+                placeholder={enPorcentaje ? "10" : "500"}
+              />
+            </span>
+            <div className="flex overflow-hidden rounded border border-linea-fuerte">
+              {[
+                { valor: false, texto: "$" },
+                { valor: true, texto: "%" },
+              ].map((opcion) => (
+                <button
+                  key={opcion.texto}
+                  type="button"
+                  onClick={() => {
+                    setEnPorcentaje(opcion.valor);
+                    ajustarAlTotal(subtotal - descuentoDe(descuentoTexto, opcion.valor));
+                  }}
+                  className={cn(
+                    "px-3 py-2 text-base transition-colors",
+                    enPorcentaje === opcion.valor
+                      ? "bg-acento text-white"
+                      : "text-tinta-suave hover:bg-contraste/[0.04]"
                 )}
               >
                 {opcion.texto}
@@ -339,6 +343,7 @@ export function DialogoCobro({
             ))}
           </div>
         </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <span className="etiqueta-campo">Cómo paga</span>
@@ -524,4 +529,18 @@ export function DialogoCobro({
       </div>
     </Dialogo>
   );
+}
+
+/**
+ * "3 renglones · 5 unidades". Lo que va por peso no suma unidades: 350 gramos
+ * de jamón no son 350 unidades, son un paquete.
+ */
+function descripcionDe(items: ItemCobro[]): string {
+  const renglones = `${numero(items.length)} ${items.length === 1 ? "renglón" : "renglones"}`;
+  const unidades = items.filter((i) => !i.porPeso).reduce((s, i) => s + i.cantidad, 0);
+  const pesados = items.filter((i) => i.porPeso).length;
+  const partes = [renglones];
+  if (unidades > 0) partes.push(`${numero(unidades)} ${unidades === 1 ? "unidad" : "unidades"}`);
+  if (pesados > 0) partes.push(`${numero(pesados)} por peso`);
+  return partes.join(" · ");
 }

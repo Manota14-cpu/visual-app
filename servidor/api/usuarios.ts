@@ -66,12 +66,18 @@ export function rutasUsuarios(r: Ruteador, a: Almacen): void {
    */
   r.get(
     "/usuarios/yo",
-    ({ usuario }) => ({
-      // Con la lista vacía la aplicación no pide contraseña. Es el estado en
-      // que queda un negocio que actualiza desde una versión anterior.
-      exigeIngreso: a.leer((d) => d.usuarios.some((u) => u.activo)),
-      usuario: usuario ? comoSeMuestra(usuario) : null,
-    }),
+    ({ usuario }) =>
+      a.leer((d) => ({
+        // Con la lista vacía la aplicación no pide contraseña. Es el estado en
+        // que queda un negocio que actualiza desde una versión anterior.
+        exigeIngreso: d.usuarios.some((u) => u.activo),
+        usuario: usuario ? comoSeMuestra(usuario) : null,
+        // Lo que cada pantalla necesita para no ofrecer lo que el servidor va
+        // a rechazar. A quien no entró no se le cuenta nada.
+        ajustes: usuario
+          ? { bloqueoMinutos: d.config.bloqueoMinutos, empleados: d.config.empleados }
+          : null,
+      })),
     "libre"
   );
 

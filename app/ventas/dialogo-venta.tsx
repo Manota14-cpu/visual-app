@@ -6,6 +6,7 @@ import { Area, Boton, Campo, Dialogo, Etiqueta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
+import { useSesion } from "@/lib/sesion";
 import { cantidadEscrita, enteroEscrito, fechaHora, importeRenglon, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { ETIQUETA_PAGO, type EstadoPedido, type ItemPedido, type Pedido } from "@/lib/tipos";
@@ -36,6 +37,7 @@ export function DialogoVenta({
   onCambio: () => void;
 }) {
   const avisos = useAvisos();
+  const { esDueno, puede } = useSesion();
   const [editando, setEditando] = useState(false);
   // La ficha se monta cuando se abre una venta y se desmonta al cerrarla, así
   // que el borrador arranca con lo que la venta tiene guardado y no hace falta
@@ -48,6 +50,9 @@ export function DialogoVenta({
   if (!pedido) return null;
 
   const cerradaEnCaja = pedido.cajaId !== null && !pedido.cajaAbierta;
+  // Anular o reabrir devuelve plata y mercadería: sin el permiso del dueño,
+  // un empleado no ve el botón que el servidor le rechazaría.
+  const puedeAnular = puede("anularVentas");
   // Una devolución se guarda al revés —cantidades e importes negativos— y este
   // editor solo sabe escribir ventas. Guardarla acá la daba vuelta: el importe
   // pasaba a sumar al cajón en vez de restar. El backend ahora la rechaza; el
@@ -139,23 +144,29 @@ export function DialogoVenta({
           </>
         ) : (
           <>
-            <Boton
-              tono="peligro"
-              icono="borrar"
-              onClick={() => void eliminar()}
-              disabled={trabajando || cerradaEnCaja}
-              title={cerradaEnCaja ? "Salió de una caja cerrada" : undefined}
-            >
-              Eliminar
-            </Boton>
-            <Boton
-              icono="editar"
-              onClick={() => setEditando(true)}
-              disabled={pedido.estado === "cancelado" || cerradaEnCaja || esDevolucion}
-              title={esDevolucion ? "Una devolución se borra y se registra de nuevo" : undefined}
-            >
-              Editar renglones
-            </Boton>
+            {/* Borrar y editar una venta son del dueño: el servidor no se lo
+                acepta a nadie más. */}
+            {esDueno && (
+              <>
+                <Boton
+                  tono="peligro"
+                  icono="borrar"
+                  onClick={() => void eliminar()}
+                  disabled={trabajando || cerradaEnCaja}
+                  title={cerradaEnCaja ? "Salió de una caja cerrada" : undefined}
+                >
+                  Eliminar
+                </Boton>
+                <Boton
+                  icono="editar"
+                  onClick={() => setEditando(true)}
+                  disabled={pedido.estado === "cancelado" || cerradaEnCaja || esDevolucion}
+                  title={esDevolucion ? "Una devolución se borra y se registra de nuevo" : undefined}
+                >
+                  Editar renglones
+                </Boton>
+              </>
+            )}
             <Link
               href={`/comprobante?venta=${pedido.id}`}
               className="inline-flex h-9 items-center gap-2 rounded border border-transparent bg-acento px-3.5 text-base text-white shadow-acento transition-colors hover:bg-acento-fuerte"
@@ -188,7 +199,14 @@ export function DialogoVenta({
             <button
               key={estado.valor}
               type="button"
-              disabled={trabajando || editando}
+              disabled={
+                trabajando ||
+                editando ||
+                (!puedeAnular && (estado.valor === "cancelado" || pedido.estado === "cancelado"))
+              }
+              title={
+                !puedeAnular && estado.valor === "cancelado" ? "Anular una venta lo hace el dueño" : undefined
+              }
               onClick={() => void cambiarEstado(estado.valor)}
               className={cn(
                 "rounded border px-2.5 py-1.5 text-chico transition-colors disabled:opacity-50",

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Icono } from "@/components/iconos";
 import { CONFIGURACION, EN_LA_BARRA, grupos, secciones, type Seccion } from "@/components/secciones";
 import { AvisoActualizacion } from "@/components/actualizacion";
+import { Bloqueo } from "@/components/bloqueo";
 import { Boton, Dialogo, Tecla } from "@/components/ui";
 import { Paleta } from "@/components/paleta";
 import { SelectorTema } from "@/components/tema";
@@ -343,6 +344,10 @@ export function Marco({
         </Dialogo>
 
         {buscando && <Paleta onCerrar={cerrarBusqueda} />}
+
+        {/* Al final a propósito: abre su propio modal, que tiene que quedar
+            arriba de cualquier otro que ya estuviera abierto. */}
+        <Bloqueo />
       </div>
     </div>
   );

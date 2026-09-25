@@ -51,6 +51,7 @@ function sembrarProducto(precio: number, stock = 100): string {
       cantidadMayoristaMin: null,
       stock,
       stockMinimo: 0,
+      proveedorId: null,
       activo: true,
       creadoEn: ahora,
       actualizadoEn: ahora,

@@ -39,6 +39,7 @@ export type NombreIcono =
   | "etiqueta"
   | "reloj"
   | "salir"
+  | "candado"
   | "camion"
   | "recuento"
   | "puntos"
@@ -252,6 +253,12 @@ const trazos: Record<NombreIcono, ReactNode> = {
     <>
       <path d="M14 4.5H6.5A1.5 1.5 0 0 0 5 6v12a1.5 1.5 0 0 0 1.5 1.5H14" />
       <path d="M17.5 8.5 21 12l-3.5 3.5M21 12h-9" />
+    </>
+  ),
+  candado: (
+    <>
+      <rect x="5" y="10.5" width="14" height="10" rx="2" />
+      <path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3M12 14.5v2" />
     </>
   ),
 };

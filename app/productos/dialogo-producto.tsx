@@ -4,8 +4,10 @@ import { useState } from "react";
 import { Boton, Campo, Dialogo, Selector, Area } from "@/components/ui";
 import { useAvisos } from "@/components/avisos";
 import { api, ErrorApi } from "@/lib/api";
+import { useDatos } from "@/lib/datos";
 import { leerNumero, margenSobreCosto, margenSobreVenta, plata } from "@/lib/formato";
-import type { Categoria, Producto } from "@/lib/tipos";
+import { useSesion } from "@/lib/sesion";
+import type { Categoria, Pagina, Producto, Proveedor } from "@/lib/tipos";
 
 const UNIDADES = [
   "unidad", "x1u", "x3u", "x5u", "x10u", "x20u", "x25u", "x50u", "x100u",
@@ -15,6 +17,7 @@ const UNIDADES = [
 interface Formulario {
   nombre: string;
   categoriaId: string;
+  proveedorId: string;
   sku: string;
   codigoBarras: string;
   unidadMedida: string;
@@ -31,6 +34,7 @@ interface Formulario {
 const vacio: Formulario = {
   nombre: "",
   categoriaId: "",
+  proveedorId: "",
   sku: "",
   codigoBarras: "",
   unidadMedida: "unidad",
@@ -48,6 +52,7 @@ function desde(producto: Producto): Formulario {
   return {
     nombre: producto.nombre,
     categoriaId: producto.categoriaId ?? "",
+    proveedorId: producto.proveedorId ?? "",
     sku: producto.sku ?? "",
     codigoBarras: producto.codigoBarras ?? "",
     unidadMedida: producto.unidadMedida,
@@ -86,6 +91,12 @@ export function DialogoProducto({
   onGuardado: () => void;
 }) {
   const avisos = useAvisos();
+  // El proveedor es del dueño, como el costo: al empleado no se le pregunta.
+  const { esDueno } = useSesion();
+  const { datos: listaProveedores } = useDatos<Pagina<Proveedor>>(
+    esDueno ? "/proveedores?estado=activos&porPagina=200" : null
+  );
+  const proveedores = listaProveedores?.items ?? [];
 
   // El formulario se llena una sola vez, al montarse. Quien abre el diálogo lo
   // monta recién en ese momento y le pasa una `key` distinta por producto, así
@@ -128,6 +139,8 @@ export function DialogoProducto({
     const cuerpo = {
       nombre: datos.nombre,
       categoriaId: datos.categoriaId || null,
+      // Solo si hay a quién elegir: sin la lista cargada no se pisa el que tenía.
+      ...(esDueno && listaProveedores ? { proveedorId: datos.proveedorId || null } : {}),
       descripcion: datos.descripcion,
       sku: datos.sku,
       codigoBarras: datos.codigoBarras,
@@ -198,6 +211,26 @@ export function DialogoProducto({
           <Campo etiqueta="Código interno (SKU)" placeholder="VAS-VAS-001" {...campo("sku")} />
           <Campo etiqueta="Código de barras" placeholder="7790000000000" inputMode="numeric" {...campo("codigoBarras")} />
         </div>
+
+        {proveedores.length > 0 && (
+          <Selector
+            etiqueta="Proveedor"
+            ayuda="A quién se le compra. Sirve para aplicar el aumento de su lista solo a sus productos."
+            {...campo("proveedorId")}
+          >
+            <option value="">Sin proveedor</option>
+            {/* Uno que se eliminó no está en la lista: sin esto, guardar el
+                producto le borraba el proveedor sin que nadie lo eligiera. */}
+            {datos.proveedorId && !proveedores.some((p) => p.id === datos.proveedorId) && (
+              <option value={datos.proveedorId}>{producto?.proveedor ?? "Proveedor eliminado"}</option>
+            )}
+            {proveedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </Selector>
+        )}
 
         {/* Va arriba de los precios porque cambia lo que significan: con esto
             prendido, el precio es por kilo y el stock se cuenta en gramos. */}

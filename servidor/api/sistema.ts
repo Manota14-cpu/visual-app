@@ -5,8 +5,9 @@ import { anfitrion } from "../anfitrion.ts";
 import type { Ruteador } from "../http.ts";
 import { lanzar } from "../lanzar.ts";
 import { direccionesDeRed } from "../red.ts";
-import { ajustarStock, efectivoDe, recortar, recortarObligatorio } from "../reglas.ts";
-import type { BaseDatos, Caja, Cliente, Pedido } from "../tipos.ts";
+import { ajustarStock, efectivoDe, entero, recortar, recortarObligatorio } from "../reglas.ts";
+import { cantidadDeEtiqueta, leerEtiqueta, productoDelPlu, verificadorValido } from "../balanza.ts";
+import type { BaseDatos, Caja, Cliente, ConfigBalanza, Pedido } from "../tipos.ts";
 import { estaEscuchandoEnRed, puertoDeEscucha } from "../vida.ts";
 
 /**
@@ -69,6 +70,95 @@ export function rutasSistema(r: Ruteador, a: Almacen): void {
       );
       d.config.detalle = recortar(cuerpo.detalle as string, 160);
       return d.config;
+    }), "dueno");
+
+  /**
+   * El mostrador: la balanza, lo que pueden hacer los empleados y a los
+   * cuántos minutos se bloquea la pantalla. Cada parte es opcional, así cada
+   * tarjeta de la configuración guarda solo lo suyo.
+   */
+  r.put("/sistema/mostrador", ({ cuerpo }) =>
+    a.escribir((d) => {
+      const balanza = cuerpo.balanza as Record<string, unknown> | undefined;
+      if (balanza && typeof balanza === "object") {
+        const prefijo = String(balanza.prefijo ?? "").trim();
+        if (!/^2\d?$/.test(prefijo)) throw new Regla("El prefijo de la balanza es un 2, o dos dígitos que empiezan con 2.");
+        const digitosPlu = entero(balanza.digitosPlu, 0);
+        if (digitosPlu < 3 || digitosPlu > 6) throw new Regla("El número de producto de la balanza tiene de 3 a 6 dígitos.");
+        if (12 - prefijo.length - digitosPlu < 4) throw new Regla("Con esos largos no queda lugar para el importe.");
+        d.config.balanza = {
+          activa: balanza.activa === true,
+          prefijo,
+          digitosPlu,
+          contenido: balanza.contenido === "peso" ? "peso" : "importe",
+        };
+      }
+
+      const empleados = cuerpo.empleados as Record<string, unknown> | undefined;
+      if (empleados && typeof empleados === "object") {
+        d.config.empleados = {
+          descuentos: empleados.descuentos === true,
+          anularVentas: empleados.anularVentas === true,
+        };
+      }
+
+      if (cuerpo.bloqueoMinutos !== undefined) {
+        const minutos = entero(cuerpo.bloqueoMinutos, 0);
+        if (minutos < 0 || minutos > 240) throw new Regla("El bloqueo va de 0 (nunca) a 240 minutos.");
+        d.config.bloqueoMinutos = minutos;
+      }
+
+      return d.config;
+    }), "dueno");
+
+  /**
+   * Cómo se lee una etiqueta con la configuración actual (o la que se está
+   * por guardar). Es para acertar el formato de la balanza escaneando una
+   * etiqueta de verdad, en vez de adivinar cuántos dígitos tiene cada parte.
+   */
+  r.post("/sistema/balanza/probar", ({ cuerpo }) =>
+    a.leer((d) => {
+      const codigo = String(cuerpo.codigo ?? "").trim();
+      const b = (cuerpo.balanza as Record<string, unknown> | undefined) ?? {};
+      const config: ConfigBalanza = {
+        activa: true,
+        prefijo: String(b.prefijo ?? d.config.balanza.prefijo),
+        digitosPlu: entero(b.digitosPlu, d.config.balanza.digitosPlu),
+        contenido: b.contenido === "peso" ? "peso" : b.contenido === "importe" ? "importe" : d.config.balanza.contenido,
+      };
+
+      if (!/^\d{13}$/.test(codigo)) return { ok: false, mensaje: "Una etiqueta de balanza tiene 13 dígitos." };
+      if (!codigo.startsWith(config.prefijo)) {
+        return { ok: false, mensaje: `No empieza con ${config.prefijo}: revisá el prefijo.` };
+      }
+      if (!verificadorValido(codigo)) return { ok: false, mensaje: "El último dígito no cierra: probá escanearla de nuevo." };
+
+      const etiqueta = leerEtiqueta(codigo, config);
+      if (!etiqueta) return { ok: false, mensaje: "Con esos largos no se puede leer." };
+
+      const producto = productoDelPlu(d, etiqueta.plu) ?? null;
+      let lectura: ReturnType<typeof cantidadDeEtiqueta> | null = null;
+      let mensaje: string | null = null;
+      if (producto) {
+        try {
+          lectura = cantidadDeEtiqueta(producto, etiqueta, config);
+        } catch (error) {
+          mensaje = error instanceof Error ? error.message : null;
+        }
+      } else {
+        mensaje = `Ningún producto tiene ${etiqueta.plu} como código interno.`;
+      }
+
+      return {
+        ok: true,
+        plu: etiqueta.plu,
+        valor: etiqueta.valor,
+        contenido: config.contenido,
+        producto: producto ? { nombre: producto.nombre, precio: producto.precioVenta } : null,
+        cantidad: lectura?.cantidad ?? null,
+        importe: lectura?.importeEtiqueta ?? null,
+        aviso: mensaje,
+      };
     }), "dueno");
 
   r.post("/sistema/copia", () => {
@@ -410,6 +500,7 @@ function armarEjemplo(): BaseDatos {
       cantidadMayoristaMin: null,
       stock: 0,
       stockMinimo: minimo,
+      proveedorId: null,
       activo: true,
       creadoEn: hace(40),
       actualizadoEn: hace(40),

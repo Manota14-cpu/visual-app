@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Buscador } from "@/components/ui";
 import { useDatos, useEspera } from "@/lib/datos";
-import { api, consulta } from "@/lib/api";
+import { api, consulta, ErrorApi } from "@/lib/api";
 import { cantidadEscrita, numero, plata } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { BotonCamara } from "@/components/camara-codigos";
@@ -37,6 +37,14 @@ export function decidirEnter<T>(
   activo: number
 ): { accion: "elegir"; producto: T } | { accion: "codigo"; codigo: string } | { accion: "nada" } {
   const texto = escrito.trim();
+
+  // Un código de barras entero se busca siempre exacto, nunca en la lista.
+  // Las variantes de una marca (los sabores, los shampoos de una línea)
+  // comparten los primeros dígitos; si la lista quedó con los resultados de
+  // un pedazo del código —la respuesta llega después que `termino`—, el
+  // primero de la lista es otra variante y se cobraba una cosa por otra.
+  if (/^\d{8,}$/.test(texto)) return { accion: "codigo", codigo: texto };
+
   const alDia = texto === termino.trim();
   const elegido = alDia ? resultados[activo] : undefined;
 
@@ -50,12 +58,16 @@ export function decidirEnter<T>(
 }
 
 /**
- * El producto que tiene exactamente ese código de barras o SKU, o `null`.
+ * El producto que tiene exactamente ese código de barras o SKU.
  *
  * Lo usan el buscador (Enter) y el lector de la caja, que escucha aunque el
- * cursor no esté en el buscador.
+ * cursor no esté en el buscador. Si es una etiqueta de la balanza, viene con
+ * lo que trae el paquete. Si no hay producto, `mensaje` dice por qué cuando
+ * el servidor lo sabe (el PLU de la balanza que falta cargar, por ejemplo).
  */
-export async function buscarPorCodigo(codigo: string): Promise<ProductoBuscado | null> {
+export async function buscarPorCodigo(
+  codigo: string
+): Promise<{ producto: ProductoBuscado | null; mensaje: string | null }> {
   try {
     const producto = await api.get<{
       id: string;
@@ -66,20 +78,25 @@ export async function buscarPorCodigo(codigo: string): Promise<ProductoBuscado |
       stock: number;
       unidadMedida: string;
       porPeso: boolean;
+      balanza?: { cantidad: number; importeEtiqueta: number | null };
     }>(`/productos/codigo/${encodeURIComponent(codigo)}`);
 
     return {
-      id: producto.id,
-      nombre: producto.nombre,
-      sku: producto.sku,
-      codigoBarras: producto.codigoBarras,
-      precio: producto.precioVenta,
-      stock: producto.stock,
-      unidadMedida: producto.unidadMedida,
-      porPeso: producto.porPeso,
+      producto: {
+        id: producto.id,
+        nombre: producto.nombre,
+        sku: producto.sku,
+        codigoBarras: producto.codigoBarras,
+        precio: producto.precioVenta,
+        stock: producto.stock,
+        unidadMedida: producto.unidadMedida,
+        porPeso: producto.porPeso,
+        balanza: producto.balanza,
+      },
+      mensaje: null,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    return { producto: null, mensaje: error instanceof ErrorApi ? error.message : null };
   }
 }
 
@@ -96,7 +113,7 @@ export function BuscadorProductos({
    * Un código leído que no es de ningún producto. Antes no pasaba nada: el
    * lector pitaba, la pantalla quedaba igual y parecía que no andaba.
    */
-  onNoEncontrado?: (codigo: string) => void;
+  onNoEncontrado?: (codigo: string, mensaje: string | null) => void;
   autoFocus?: boolean;
   placeholder?: string;
   /** El botón para leer con la cámara, al lado del buscador. */
@@ -126,12 +143,12 @@ export function BuscadorProductos({
   }
 
   async function porCodigo(codigo: string) {
-    const producto = await buscarPorCodigo(codigo);
+    const { producto, mensaje } = await buscarPorCodigo(codigo);
     if (producto) {
       elegir(producto, true);
     } else {
       setTexto("");
-      onNoEncontrado?.(codigo);
+      onNoEncontrado?.(codigo, mensaje);
     }
   }
 

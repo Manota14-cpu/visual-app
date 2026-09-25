@@ -533,9 +533,15 @@ function prepararActualizaciones() {
     // guardada en disco en el momento en que se cobra, así que no hay nada a
     // medio escribir; esto es para soltar el puerto y el archivo prolijamente.
     await apagarServidor();
-    // isSilent: el instalador no muestra su asistente — es una actualización,
-    // no una instalación nueva. isForceRunAfter: vuelve a abrir el programa.
-    actualizador.quitAndInstall(true, true);
+    // Se anota qué versión se está instalando: si al volver a abrir el
+    // programa sigue siendo la vieja, la instalación falló y hay que decirlo
+    // en vez de ofrecer la misma actualización como si nada.
+    anotarPendiente(actualizacion.nueva);
+    // No silencioso: si el instalador no puede reemplazar algo (un archivo en
+    // uso, Windows que lo frena), el aviso se ve en pantalla. En silencio
+    // fallaba sin que nadie se enterara y el programa volvía a pedir actualizar.
+    // isForceRunAfter: vuelve a abrir el programa.
+    actualizador.quitAndInstall(false, true);
     return null;
   });
 
@@ -556,13 +562,18 @@ function prepararActualizaciones() {
   autoUpdater.disableWebInstaller = true;
   autoUpdater.logger = registroDeActualizaciones();
 
+  const fallida = revisarPendiente();
+
   autoUpdater.on("update-available", (info) => {
     avisarActualizacion({
       fase: "disponible",
       nueva: info.version,
       notas: textoDeNotas(info.releaseNotes),
       revisadaEn: new Date().toISOString(),
-      error: null,
+      error:
+        fallida === info.version
+          ? `La última vez no se pudo instalar la versión ${fallida}. Probá de nuevo; si vuelve a pasar, bajá el instalador de https://github.com/Manota14-cpu/visual-app/releases/latest y ejecutalo con el programa cerrado.`
+          : null,
     });
   });
   autoUpdater.on("update-not-available", () => {
@@ -638,6 +649,32 @@ function mensajeDeError(error) {
  * En pantalla va un mensaje que se entienda; el motivo real queda acá, que es
  * lo que se pide cuando alguien llama porque "no se actualiza".
  */
+function archivoPendiente() {
+  return path.join(carpetaDatos || app.getPath("userData"), "actualizacion-pendiente.json");
+}
+
+function anotarPendiente(version) {
+  try {
+    fs.writeFileSync(archivoPendiente(), JSON.stringify({ version, desde: app.getVersion() }));
+  } catch {
+    // Sin la marca solo se pierde el aviso de instalación fallida.
+  }
+}
+
+/** La versión que se intentó instalar y no quedó puesta, o null. */
+function revisarPendiente() {
+  let pendiente = null;
+  try {
+    pendiente = JSON.parse(fs.readFileSync(archivoPendiente(), "utf8"));
+    fs.unlinkSync(archivoPendiente());
+  } catch {
+    return null;
+  }
+  if (!pendiente?.version || pendiente.version === app.getVersion()) return null;
+  registroDeActualizaciones().error(`No quedó instalada la ${pendiente.version}: sigue la ${app.getVersion()}`);
+  return pendiente.version;
+}
+
 function registroDeActualizaciones() {
   const archivo = path.join(carpetaDatos || app.getPath("userData"), "actualizaciones.log");
   const anotar = (nivel) => (...partes) => {

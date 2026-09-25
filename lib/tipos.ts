@@ -33,6 +33,9 @@ export interface Producto {
   cantidadMayoristaMin: number | null;
   stock: number;
   stockMinimo: number;
+  /** A quién se le compra. Solo lo ve el dueño. */
+  proveedorId: string | null;
+  proveedor: string | null;
   activo: boolean;
   /** Sobre la venta: cuanto de cada peso que entra queda. */
   margen: number | null;
@@ -63,6 +66,8 @@ export interface ProductoBuscado {
   stock: number;
   unidadMedida: string;
   porPeso: boolean;
+  /** Si se leyó de una etiqueta de balanza: cuánto trae el paquete. */
+  balanza?: { cantidad: number; importeEtiqueta: number | null };
 }
 
 export interface CambioPrecio {
@@ -494,6 +499,8 @@ export interface Proveedor {
   /** Lo que el negocio le debe hoy. Se deduce, no se guarda. */
   deuda: number;
   compras: number;
+  /** Cuántos productos tienen cargado este proveedor. */
+  productos: number;
   ultimaCompra: string | null;
   creadoEn: Fecha;
 }
@@ -571,6 +578,20 @@ export interface UsuarioSesion {
  * seguridad son cuentas del dueño. El tipo lo dice para que la pantalla tenga
  * que contemplarlo en vez de romperse.
  */
+/** Cómo se leen las etiquetas de la balanza. Ver servidor/balanza.ts. */
+export interface ConfigBalanza {
+  activa: boolean;
+  prefijo: string;
+  digitosPlu: number;
+  contenido: "importe" | "peso";
+}
+
+/** Lo que el dueño les habilita a los empleados. */
+export interface PermisosEmpleados {
+  descuentos: boolean;
+  anularVentas: boolean;
+}
+
 export interface Sistema {
   programa: string;
   archivo?: string;
@@ -583,6 +604,9 @@ export interface Sistema {
     detalle: string | null;
     /** Carpeta de afuera donde se deja la copia de cada día. Solo al dueño. */
     resguardo?: string | null;
+    balanza?: ConfigBalanza;
+    empleados?: PermisosEmpleados;
+    bloqueoMinutos?: number;
     creadaEn?: Fecha;
   };
   conteos?: {

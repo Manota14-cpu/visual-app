@@ -23,7 +23,8 @@ import { useDatos, useEspera } from "@/lib/datos";
 import { api, consulta, ErrorApi } from "@/lib/api";
 import { cantidadEscrita, numero, plata, porcentaje } from "@/lib/formato";
 import { cn } from "@/lib/utils";
-import type { Categoria, PaginaProductos, Producto } from "@/lib/tipos";
+import { useSesion } from "@/lib/sesion";
+import type { Categoria, Pagina, PaginaProductos, Producto, Proveedor } from "@/lib/tipos";
 import { DialogoProducto } from "./dialogo-producto";
 import { DialogoStock } from "./dialogo-stock";
 import { DialogoCategorias } from "./dialogo-categorias";
@@ -58,6 +59,8 @@ function Catalogo() {
   const [estado, setEstado] = useState(parametros.get("estado") ?? "activos");
 
   const [categoria, setCategoria] = useState("");
+  // "ninguno" muestra los que todavía no tienen proveedor: los que faltan asignar.
+  const [proveedor, setProveedor] = useState("");
   const [orden, setOrden] = useState("nombre");
   const [pagina, setPagina] = useState(1);
   const [elegidos, setElegidos] = useState<string[]>([]);
@@ -93,15 +96,22 @@ function Catalogo() {
         q: termino,
         estado,
         categoria,
+        proveedor,
         orden,
         pagina,
         porPagina: 25,
       })}`,
-    [termino, estado, categoria, orden, pagina]
+    [termino, estado, categoria, proveedor, orden, pagina]
   );
 
   const { datos, cargando, recargar } = useDatos<PaginaProductos>(ruta);
   const { datos: categorias, recargar: recargarCategorias } = useDatos<Categoria[]>("/categorias");
+  // A quién se le compra cada cosa es del dueño: al empleado ni se le pide.
+  const { esDueno } = useSesion();
+  const { datos: listaProveedores } = useDatos<Pagina<Proveedor>>(
+    esDueno ? "/proveedores?estado=activos&porPagina=200" : null
+  );
+  const proveedores = listaProveedores?.items ?? [];
 
   const productos = datos?.items ?? [];
   const todosElegidos = productos.length > 0 && elegidos.length === productos.length;
@@ -184,7 +194,12 @@ function Catalogo() {
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr]">
+        <div
+          className={cn(
+            "grid gap-2 sm:grid-cols-2",
+            proveedores.length > 0 ? "xl:grid-cols-[2fr_1fr_1fr_1fr_1fr]" : "xl:grid-cols-[2fr_1fr_1fr_1fr]"
+          )}
+        >
           <Buscador
             placeholder="Buscar por nombre, código o descripción"
             value={busqueda}
@@ -209,6 +224,21 @@ function Catalogo() {
               </option>
             ))}
           </Selector>
+          {proveedores.length > 0 && (
+            <Selector
+              value={proveedor}
+              onChange={(e) => filtrar(() => setProveedor(e.target.value))}
+              aria-label="Proveedor"
+            >
+              <option value="">Todos los proveedores</option>
+              <option value="ninguno">Sin proveedor</option>
+              {proveedores.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </Selector>
+          )}
           <Selector value={orden} onChange={(e) => filtrar(() => setOrden(e.target.value))} aria-label="Orden">
             <option value="nombre">Por nombre</option>
             <option value="stock">Menos stock primero</option>
@@ -243,6 +273,30 @@ function Catalogo() {
                 </option>
               ))}
             </select>
+            {proveedores.length > 0 && (
+              <select
+                className="h-8 rounded border border-linea-fuerte bg-papel px-2 text-chico"
+                value=""
+                disabled={trabajando}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const id = e.target.value === "ninguno" ? null : e.target.value;
+                  const nombre = proveedores.find((p) => p.id === id)?.nombre;
+                  void accionMasiva(
+                    { proveedorId: id },
+                    nombre ? `Ahora se le compran a ${nombre}.` : "Quedaron sin proveedor."
+                  );
+                }}
+              >
+                <option value="">Asignar proveedor…</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+                <option value="ninguno">Sin proveedor</option>
+              </select>
+            )}
             <Boton chico disabled={trabajando} onClick={() => void accionMasiva({ activo: false }, "Productos eliminados.")}>
               Eliminar
             </Boton>

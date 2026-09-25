@@ -28,6 +28,7 @@ import { BuscadorProductos, buscarPorCodigo } from "./buscador-productos";
 import { DialogoCobro } from "./dialogo-cobro";
 import { DialogoDevolucion } from "./dialogo-devolucion";
 import { DialogoCierre } from "./dialogo-cierre";
+import { DialogoAlta } from "./dialogo-alta";
 
 export default function PaginaCaja() {
   const avisos = useAvisos();
@@ -52,6 +53,8 @@ export default function PaginaCaja() {
   // desmontaba antes de que alguien alcanzara a leerlo.
   const [cerrando, setCerrando] = useState<Caja | null>(null);
   const [moviendo, setMoviendo] = useState(false);
+  // Un código leído que no estaba cargado, para darlo de alta ahí mismo.
+  const [nuevoCodigo, setNuevoCodigo] = useState<string | null>(null);
   const [ultima, setUltima] = useState<{
     id: string;
     numero: number;
@@ -99,11 +102,13 @@ export default function PaginaCaja() {
     stock: number;
     unidadMedida: string;
     porPeso: boolean;
+    balanza?: { cantidad: number };
   }) {
     // Un producto por peso arranca en un kilo y otro en una unidad. Es lo que
     // hace que agregarlo de nuevo sume "otro kilo" y no "otro gramo", que sería
     // inútil; y un kilo es el número que más veces hay que corregir menos.
-    const paso = producto.porPeso ? 1000 : 1;
+    // La etiqueta de la balanza ya dice cuánto trae el paquete.
+    const paso = producto.balanza?.cantidad ?? (producto.porPeso ? 1000 : 1);
 
     setItems((previos) => {
       const existente = previos.find((i) => i.productoId === producto.id);
@@ -135,13 +140,23 @@ export default function PaginaCaja() {
    * aviso: antes la lectura se perdía sin ninguna señal y parecía que el lector
    * no andaba.
    */
-  function leido(codigo: string, producto: Parameters<typeof agregar>[0] | null) {
+  function leido(
+    codigo: string,
+    producto: Parameters<typeof agregar>[0] | null,
+    mensaje: string | null = null
+  ) {
     if (producto) {
       agregar(producto);
       pitido("ok");
     } else {
       pitido("error");
-      avisos.error(`No hay ningún producto con el código ${codigo}.`);
+      // Se carga ahí mismo, con el nombre buscado en la base mundial. Un
+      // código escrito a mano de pocas letras es más un error de tipeo, y uno
+      // de 13 que empieza con 2 es de uso interno —la etiqueta de la balanza—:
+      // no está en ninguna base, y darlo de alta con ese código no serviría
+      // porque el próximo paquete trae otro importe y otro código.
+      if (/^\d{8,14}$/.test(codigo) && !/^2\d{12}$/.test(codigo)) setNuevoCodigo(codigo);
+      else avisos.error(mensaje ?? `No hay ningún producto con el código ${codigo}.`);
     }
     setLectura({ codigo, producto: producto?.nombre ?? null });
   }
@@ -149,7 +164,8 @@ export default function PaginaCaja() {
   // El lector se escucha en toda la pantalla, no solo en el buscador: si el
   // cursor quedó en otro lado, la lectura igual entra al carrito.
   useLectorDeCodigos(
-    (codigo) => void buscarPorCodigo(codigo).then((producto) => leido(codigo, producto)),
+    (codigo) =>
+      void buscarPorCodigo(codigo).then(({ producto, mensaje }) => leido(codigo, producto, mensaje)),
     Boolean(caja)
   );
 
@@ -233,7 +249,7 @@ export default function PaginaCaja() {
                   onElegir={(producto, porCodigo) =>
                     porCodigo ? leido(producto.codigoBarras ?? producto.sku ?? "", producto) : agregar(producto)
                   }
-                  onNoEncontrado={(codigo) => leido(codigo, null)}
+                  onNoEncontrado={(codigo, mensaje) => leido(codigo, null, mensaje)}
                 />
 
                 <Lector lectura={lectura} esDueno={esDueno} />
@@ -508,6 +524,19 @@ export default function PaginaCaja() {
               cajaId={caja.id}
               onCerrar={() => setDevolviendo(false)}
               onHecha={actualizar}
+            />
+          )}
+
+          {nuevoCodigo && (
+            <DialogoAlta
+              codigo={nuevoCodigo}
+              verCosto={esDueno}
+              onCerrar={() => setNuevoCodigo(null)}
+              onCreado={(producto) => {
+                setNuevoCodigo(null);
+                agregar(producto);
+                setLectura({ codigo: producto.codigoBarras ?? "", producto: producto.nombre });
+              }}
             />
           )}
 
@@ -862,7 +891,9 @@ function Lector({
           </span>
         )}
       </span>
-      {noExiste && esDueno && (
+      {/* Una etiqueta de la balanza no se carga como código del producto:
+          cada paquete trae otro. El aviso ya dice qué número falta cargar. */}
+      {noExiste && esDueno && !/^2\d{12}$/.test(lectura.codigo) && (
         <Link
           href={`/productos?nuevo=1&codigo=${encodeURIComponent(lectura.codigo)}`}
           className="font-medium text-acento-texto hover:underline"

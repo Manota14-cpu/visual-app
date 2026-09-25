@@ -34,6 +34,16 @@ describe("Enter en el buscador", () => {
     expect(decision).toEqual({ accion: "codigo", codigo: "7790040123456" });
   });
 
+  it("con un código de barras entero no elige de la lista, aunque parezca al día", () => {
+    // Los shampoos de una misma línea comparten los primeros dígitos. La lista
+    // puede ser la de un pedazo del código y su primero, otra variante.
+    const variantes = ["Shampoo Manzana", "Shampoo Coco"];
+    expect(decidirEnter("7791293000028", "7791293000028", variantes, 0)).toEqual({
+      accion: "codigo",
+      codigo: "7791293000028",
+    });
+  });
+
   it("busca el código cuando todavía no contestó nada", () => {
     expect(decidirEnter("7790040123456", "", [], 0)).toEqual({
       accion: "codigo",

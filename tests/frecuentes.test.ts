@@ -44,6 +44,7 @@ function sembrar(nombre: string, precio = 1000, stock = 100): string {
       cantidadMayoristaMin: null,
       stock,
       stockMinimo: 0,
+      proveedorId: null,
       activo: true,
       creadoEn: ahora,
       actualizadoEn: ahora,

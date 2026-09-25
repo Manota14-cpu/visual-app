@@ -1,7 +1,7 @@
 {
   "name": "visual-app",
   "productName": "Visual App",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "private": true,
   "description": "Stock, caja y ventas para el negocio. Aplicación de escritorio para Windows.",
   "author": "Visual Solution (https://visual-solution.vercel.app)",

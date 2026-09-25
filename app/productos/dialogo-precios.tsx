@@ -18,11 +18,15 @@ import type { FilaPrecio } from "@/lib/tipos";
 export function DialogoPrecios({
   abierto,
   ids,
+  titulo = "Ajustar precios",
+  motivoInicial = "",
   onCerrar,
   onAplicado,
 }: {
   abierto: boolean;
   ids: string[];
+  titulo?: string;
+  motivoInicial?: string;
   onCerrar: () => void;
   onAplicado: () => void;
 }) {
@@ -30,7 +34,7 @@ export function DialogoPrecios({
   const [porcentaje, setPorcentaje] = useState("10");
   const [aplicarA, setAplicarA] = useState("venta");
   const [redondeo, setRedondeo] = useState("10");
-  const [motivo, setMotivo] = useState("");
+  const [motivo, setMotivo] = useState(motivoInicial);
   const [previa, setPrevia] = useState<FilaPrecio[]>([]);
   const [calculando, setCalculando] = useState(false);
   const [aplicando, setAplicando] = useState(false);
@@ -81,7 +85,7 @@ export function DialogoPrecios({
     <Dialogo
       abierto={abierto}
       onCerrar={onCerrar}
-      titulo="Ajustar precios"
+      titulo={titulo}
       descripcion={`${numero(ids.length)} ${ids.length === 1 ? "producto seleccionado" : "productos seleccionados"}`}
       pie={
         <>
@@ -117,6 +121,8 @@ export function DialogoPrecios({
             <option value="10">Múltiplos de 10</option>
             <option value="50">Múltiplos de 50</option>
             <option value="100">Múltiplos de 100</option>
+            <option value="500">Múltiplos de 500</option>
+            <option value="1000">Múltiplos de 1.000</option>
           </Selector>
         </div>
 
